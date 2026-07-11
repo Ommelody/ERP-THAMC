@@ -51,7 +51,7 @@ class Component extends DCLogic {
     exportModal:null,
     br:[], pr:[], loaded:false, online:false, sapOnline:false, notifOpen:false,
     authed:false, loginU:'', loginP:'', loginErr:'', prDraft:null,
-    icrRows:[], icrInput:{}
+    icrRows:[], icrInput:{}, users:[], userForm:{username:'',password:'',name:'',role:'requester'}
   };
   SUPA_URL='https://hkqyeeonfyzlbnimztuz.supabase.co';
   SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXllZW9uZnl6bGJuaW16dHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODU4NDMsImV4cCI6MjA5OTI2MTg0M30.Od-n8yNuIWu6Kx1Y_mW6Aemg3TRCxZG5ooTESpOgZBE';
@@ -103,7 +103,8 @@ class Component extends DCLogic {
       {key:'br-allocate',label:'จัดสรรงบประมาณ',icon:'฿',roles:['budget'],badge:'brAllocate'},
       {key:'item-pro',label:'เชื่อมต่อ Item Pro',icon:'⇄',roles:['budget']},
       {key:'pr-queue',label:'คิวรับเรื่องซื้อ',icon:'☰',roles:['procurement'],badge:'prQueue'},
-      {key:'po-verify',label:'ตรวจสอบเอกสารสั่งซื้อ',icon:'▤',roles:['procurement']}
+      {key:'po-verify',label:'ตรวจสอบเอกสารสั่งซื้อ',icon:'▤',roles:['procurement']},
+      {key:'admin-users',label:'จัดการผู้ใช้ + สิทธิ์',icon:'⚙',roles:['admin']}
     ]},
     {zone:'แดชบอร์ด',items:[
       {key:'overview',label:'ภาพรวมระบบ',icon:'◱',roles:['requester','budget','procurement','finance','exec']},
@@ -119,7 +120,7 @@ class Component extends DCLogic {
     ]}
   ];
   navFor(){ const r=this.state.role; return this.NAV.map(z=>({zone:z.zone,items:z.items.filter(it=>r==='admin'||it.roles.includes(r))})).filter(z=>z.items.length); }
-  go(key){ this.setState({page:key,drawer:false,sel:null}); if(key==='item-pro') this.loadIcr(); window.scrollTo&&window.scrollTo(0,0); }
+  go(key){ this.setState({page:key,drawer:false,sel:null}); if(key==='item-pro') this.loadIcr(); if(key==='admin-users') this.loadUsers(); window.scrollTo&&window.scrollTo(0,0); }
   switchRole(rk){ this.setState({role:rk,roleMenu:false,drawer:false,sel:null,selType:null,page:this.roleHome(rk),poTab:'all',payTab:'unpaid',regTab:'all'}); }
 
   badgeCount(kind){ if(!this.D)return 0;
@@ -172,7 +173,10 @@ class Component extends DCLogic {
   // ---------- auth ----------
   ACCOUNTS=[{u:'Admin',p:'Admin',role:'admin'},{u:'requester',p:'1234',role:'requester'},{u:'budget',p:'1234',role:'budget'},{u:'procure',p:'1234',role:'procurement'},{u:'finance',p:'1234',role:'finance'},{u:'exec',p:'1234',role:'exec'}];
   login(){ const u=(this.state.loginU||'').trim(); const p=this.state.loginP||'';
-    const acc=this.ACCOUNTS.find(a=>a.u.toLowerCase()===u.toLowerCase()&&a.p===p);
+    const pool=(this.state.users&&this.state.users.length)? this.state.users.map(x=>({u:x.username,p:x.password,role:x.role,active:x.active!==false,name:x.name})) : this.ACCOUNTS.map(a=>({u:a.u,p:a.p,role:a.role,active:true}));
+    let acc=pool.find(a=>a.u.toLowerCase()===u.toLowerCase()&&a.p===p);
+    if(!acc && u.toLowerCase()==='admin' && p==='Admin') acc={u:'Admin',role:'admin',active:true};
+    if(acc && acc.active===false){ this.setState({loginErr:'บัญชีนี้ถูกระงับการใช้งาน — ติดต่อผู้ดูแลระบบ'}); return; }
     if(acc){ this.setState({authed:true,role:acc.role,page:this.roleHome(acc.role),loginErr:'',loginP:''}); this.toastMsg('เข้าสู่ระบบสำเร็จ · '+this.ROLES.find(r=>r.k===acc.role).label); }
     else this.setState({loginErr:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'}); }
   logout(){ this.setState({authed:false,loginU:'',loginP:'',roleMenu:false,drawer:false}); }
@@ -309,6 +313,7 @@ class Component extends DCLogic {
     'my-requests':{t:'คำขอของฉัน',s:'ติดตามสถานะ BR → PR ทุกขั้นตอนแบบเรียลไทม์'},
     'pr-create':{t:'สร้างใบขอซื้อ (PR)',s:'เสนอความต้องการซื้อ/จ้าง/เช่า จาก BR ที่จัดสรรงบแล้ว'},
     'item-pro':{t:'เชื่อมต่อ Item Master Pro',s:'API รับ–ส่งคำขอออกรหัสพัสดุกับโปรแกรม Item Pro'},
+    'admin-users':{t:'จัดการผู้ใช้และสิทธิ์การเข้าถึง',s:'เพิ่ม/แก้ไขบัญชีผู้ใช้ กำหนดบทบาท และล้างข้อมูลทดสอบ'},
     'br-approval':{t:'อนุมัติจัดสรรงบ (ผู้บริหาร)',s:'พิจารณาอนุมัติคำขอจัดสรรงบก่อนส่งงานงบประมาณ'},
     'br-allocate':{t:'จัดสรรงบประมาณ',s:'ตรวจรหัสพัสดุ Item Pro และจัดสรรงบให้คำขอ'},
     'pr-queue':{t:'คิวรับเรื่องซื้อ',s:'ใบขอซื้อที่ผ่านงบแล้ว รอออกใบสั่งซื้อ'},
@@ -372,6 +377,7 @@ class Component extends DCLogic {
       case 'my-requests': return this.pgMyRequests();
       case 'pr-create': return this.pgPrCreate();
       case 'item-pro': return this.pgItemPro();
+      case 'admin-users': return this.pgAdminUsers();
       case 'br-approval': return this.pgBrApproval();
       case 'br-allocate': return this.pgBrAllocate();
       case 'pr-queue': return this.pgPrQueue();
@@ -441,17 +447,15 @@ class Component extends DCLogic {
   prFromDb(r){ return {kind:'pr',id:r.id,brId:r.br_id,requester:r.requester,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,items:r.items||[],sub:Number(r.sub),vat:Number(r.vat),total:Number(r.total),cat:r.cat,exp:r.exp,procType:r.proc_type,urgency:r.urgency,reason:r.reason,committee:r.committee||[],condition:r.condition,po:r.po,vendor:r.vendor,docs:r.docs||[],status:r.status,at:r.at,neededDate:r.needed_date,log:r.log||[]}; }
   async loadDb(){
     const sb=this.initDb();
-    const fallback=()=>{ this.setState({br:this.D.brs.map(b=>Object.assign({kind:'br'},b)), pr:this.D.prs.map(p=>Object.assign({kind:'pr'},p)), loaded:true, online:false}); };
+    const fallback=()=>{ this.setState({br:[], pr:[], loaded:true, online:false, users:this.defaultUsers()}); };
     if(!sb){ fallback(); return; }
     try{
       let br=(await sb.from('budget_requests').select('*').order('created_at')).data;
       let pr=(await sb.from('purchase_requests').select('*').order('created_at')).data;
       if(br===null||pr===null) throw new Error('no table');
-      if(br.length===0){ await sb.from('budget_requests').insert(this.D.brs.map(b=>this.brToDb(b))); await sb.from('purchase_requests').insert(this.D.prs.map(p=>this.prToDb(p)));
-        br=(await sb.from('budget_requests').select('*').order('created_at')).data; pr=(await sb.from('purchase_requests').select('*').order('created_at')).data; this.toastMsg('เชื่อมต่อ Supabase — เพิ่มข้อมูลตัวอย่างเริ่มต้นแล้ว'); }
-      else { this.toastMsg('เชื่อมต่อฐานข้อมูล Supabase สำเร็จ'); }
+      this.toastMsg('เชื่อมต่อฐานข้อมูล Supabase สำเร็จ — พร้อมคีย์ข้อมูลจริง');
       this.setState({br:(br||[]).map(x=>this.brFromDb(x)), pr:(pr||[]).map(x=>this.prFromDb(x)), loaded:true, online:true});
-      this.loadSap(sb);
+      this.loadSap(sb); this.loadUsers(sb);
     }catch(err){ console.warn('supabase load failed',err); this.toastMsg('ยังไม่ได้สร้างตารางใน Supabase — ใช้โหมดสาธิตชั่วคราว'); fallback(); }
   }
   async fetchAll(sb,table){ let out=[],from=0,step=1000;
@@ -1478,6 +1482,70 @@ class Component extends DCLogic {
             h('div',{style:{flex:1,minWidth:120,fontSize:12.5}},r.item_name),
             h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:12.5,color:this.GREEN,fontWeight:600}},r.code),
             this.pill('ออกรหัสแล้ว',this.GREEN,this.GREENBG,true)))):null)));
+  }
+
+  // ================= ADMIN: USER MANAGEMENT =================
+  defaultUsers(){ return [
+    {username:'Admin',password:'Admin',name:'ผู้ดูแลระบบ',role:'admin',active:true},
+    {username:'requester',password:'1234',name:'กมลวรรณ ศรีสุข',role:'requester',active:true},
+    {username:'budget',password:'1234',name:'ดร.วรพล งบดี',role:'budget',active:true},
+    {username:'procure',password:'1234',name:'ธนกร พงษ์ไพบูลย์',role:'procurement',active:true},
+    {username:'finance',password:'1234',name:'สุภาพร เงินงาม',role:'finance',active:true},
+    {username:'exec',password:'1234',name:'พญ.อรุณี วิสุทธิ์',role:'exec',active:true} ]; }
+  async loadUsers(sb){ sb=sb||this._sb; if(!sb||!this.state.online){ this.setState({users:this.defaultUsers()}); return; }
+    try{ const r=await sb.from('app_users').select('*').order('username'); if(r.error){ this.setState({users:this.defaultUsers()}); return; }
+      if((r.data||[]).length===0){ await sb.from('app_users').insert(this.defaultUsers()); const r2=await sb.from('app_users').select('*').order('username'); this.setState({users:(r2.data||this.defaultUsers())}); }
+      else this.setState({users:r.data}); }catch(e){ this.setState({users:this.defaultUsers()}); } }
+  saveUser(u){ this.setState(s=>{ const users=(s.users||[]).slice(); const i=users.findIndex(x=>x.username===u.username); if(i>=0)users[i]=u; else users.push(u); return {users}; });
+    const sb=this._sb; if(sb&&this.state.online){ sb.from('app_users').upsert(u,{onConflict:'username'}).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
+  setUserRole(username,role){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{role})); this.toastMsg('เปลี่ยนสิทธิ์ '+username+' → '+(this.ROLES.find(r=>r.k===role)||{}).label); } }
+  toggleUser(username){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{active:!(u.active!==false)})); } }
+  delUser(username){ if(String(username).toLowerCase()==='admin'){ this.toastMsg('ลบบัญชีผู้ดูแลระบบไม่ได้'); return; }
+    this.setState(s=>({users:(s.users||[]).filter(x=>x.username!==username)}));
+    const sb=this._sb; if(sb&&this.state.online){ sb.from('app_users').delete().eq('username',username).then(r=>{if(r&&r.error)console.warn(r.error);}); }
+    this.toastMsg('ลบผู้ใช้ '+username+' แล้ว'); }
+  addUser(){ const fm=this.state.userForm||{}; const un=(fm.username||'').trim(); if(!un||!fm.password){ this.toastMsg('กรอกชื่อผู้ใช้และรหัสผ่าน'); return; }
+    if((this.state.users||[]).some(x=>x.username.toLowerCase()===un.toLowerCase())){ this.toastMsg('มีชื่อผู้ใช้นี้อยู่แล้ว'); return; }
+    this.saveUser({username:un,password:fm.password,name:fm.name||un,role:fm.role||'requester',active:true});
+    this.setState({userForm:{username:'',password:'',name:'',role:'requester'}}); this.toastMsg('เพิ่มผู้ใช้ '+un+' แล้ว'); }
+  async clearDemo(){ const sb=this._sb;
+    if(sb&&this.state.online){ try{ await sb.from('purchase_requests').delete().neq('id',''); await sb.from('budget_requests').delete().neq('id',''); await sb.from('item_code_requests').delete().gte('id',0); }catch(e){ console.warn(e); } }
+    this.setState({br:[],pr:[],icrRows:[]}); this.toastMsg('ล้างข้อมูลตัวอย่างทั้งหมดแล้ว — เริ่มคีย์ข้อมูลจริงได้เลย'); }
+  pgAdminUsers(){
+    const h=React.createElement; const R=this.R; const users=this.state.users||[]; const fm=this.state.userForm||{};
+    const roleOpts=this.ROLES.map(r=>r.k);
+    const upd=(patch)=>this.setState(s=>({userForm:Object.assign({},s.userForm,patch)}));
+    return h('div',null,
+      this.kpiGrid([
+        {label:'ผู้ใช้ทั้งหมด',val:this.fmtN(users.length),unit:'บัญชี',accent:this.TEAL},
+        {label:'ใช้งานอยู่',val:this.fmtN(users.filter(u=>u.active!==false).length),unit:'บัญชี',c:this.GREEN,accent:this.GREEN},
+        {label:'ระงับใช้งาน',val:this.fmtN(users.filter(u=>u.active===false).length),unit:'บัญชี',c:this.AMBER,accent:this.AMBER},
+        {label:'ข้อมูลคำขอในระบบ',val:this.fmtN(this.brs().length+this.prs().length),unit:'รายการ',accent:this.BLUE,sub:'BR '+this.brs().length+' · PR '+this.prs().length}
+      ],4),
+      h('div',{style:{background:this.REDBG,border:'1px solid #f0cfc9',borderRadius:12,padding:R.isMobile?'14px':'15px 18px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}},
+        h('div',{style:{minWidth:0}},h('div',{style:{fontSize:13.5,fontWeight:600,color:this.RED}},'เริ่มใช้งานจริง — ล้างข้อมูลตัวอย่าง'),
+          h('div',{style:{fontSize:12,color:this.MUTE,marginTop:2}},'ลบคำขอ BR/PR และคำขอออกรหัสทั้งหมดออกจากฐานข้อมูล เพื่อเริ่มคีย์ข้อมูลจริง (ข้อมูล SAP อ้างอิงยังคงอยู่)')),
+        h('button',{onClick:()=>this.clearDemo(),style:{padding:'10px 18px',border:'none',background:this.RED,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600,flexShrink:0}},'ล้างข้อมูลตัวอย่าง')),
+      this.card(h('div',null,
+        h('div',{style:{padding:R.isMobile?'14px':'15px 18px',borderBottom:'1px solid '+this.LINE,fontSize:15,fontWeight:700}},'บัญชีผู้ใช้งาน'),
+        h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?620:'auto'}},
+          h('div',{style:{display:'grid',gridTemplateColumns:'150px 1fr 170px 110px 90px',padding:'10px 18px',background:this.PANEL,fontSize:11,fontWeight:600,color:this.MUTE,textTransform:'uppercase'}},
+            h('div',null,'ชื่อผู้ใช้'),h('div',null,'ชื่อ-นามสกุล'),h('div',null,'สิทธิ์ (บทบาท)'),h('div',{style:{textAlign:'center'}},'สถานะ'),h('div',{style:{textAlign:'center'}},'จัดการ')),
+          users.map(u=>h('div',{key:u.username,style:{display:'grid',gridTemplateColumns:'150px 1fr 170px 110px 90px',padding:'11px 18px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center'}},
+            h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},u.username),
+            h('div',{style:{minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},u.name||'—'),
+            h('select',{value:u.role,disabled:String(u.username).toLowerCase()==='admin',onChange:e=>this.setUserRole(u.username,e.target.value),style:{width:'100%',fontSize:12,border:'1px solid '+this.LINE,borderRadius:8,padding:'6px 8px',background:'#fff',cursor:'pointer'}},
+              roleOpts.map(rk=>h('option',{key:rk,value:rk},(this.ROLES.find(r=>r.k===rk)||{}).label))),
+            h('div',{style:{textAlign:'center'}}, h('span',{onClick:()=>this.toggleUser(u.username),style:{cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:20,background:u.active!==false?this.GREENBG:this.PANEL,color:u.active!==false?this.GREEN:this.MUTE,fontSize:11.5,fontWeight:600}},h('span',{style:{width:6,height:6,borderRadius:'50%',background:u.active!==false?this.GREEN:this.FADE}}),u.active!==false?'ใช้งาน':'ระงับ')),
+            h('div',{style:{textAlign:'center'}}, String(u.username).toLowerCase()==='admin'? h('span',{style:{fontSize:11,color:this.FADE}},'—') : h('span',{onClick:()=>this.delUser(u.username),style:{cursor:'pointer',color:this.RED,fontSize:12,fontWeight:600}},'ลบ')))))) ),{marginBottom:16}),
+      this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
+        this.secTitle('เพิ่มผู้ใช้ใหม่'),
+        h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr 1fr 1fr auto',gap:12,alignItems:'end'}},
+          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'ชื่อผู้ใช้'),h('input',{value:fm.username||'',onChange:e=>upd({username:e.target.value}),placeholder:'username',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,outline:'none'}})),
+          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'รหัสผ่าน'),h('input',{value:fm.password||'',onChange:e=>upd({password:e.target.value}),placeholder:'password',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,outline:'none'}})),
+          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'ชื่อ-นามสกุล'),h('input',{value:fm.name||'',onChange:e=>upd({name:e.target.value}),placeholder:'ชื่อ นามสกุล',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,outline:'none'}})),
+          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'สิทธิ์'),h('select',{value:fm.role||'requester',onChange:e=>upd({role:e.target.value}),style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,background:'#fff',cursor:'pointer'}},roleOpts.filter(r=>r!=='admin').map(rk=>h('option',{key:rk,value:rk},(this.ROLES.find(r=>r.k===rk)||{}).label)))),
+          h('button',{onClick:()=>this.addUser(),style:{padding:'11px 20px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap'}},'＋ เพิ่มผู้ใช้')))));
   }
 
   docModal2(){
