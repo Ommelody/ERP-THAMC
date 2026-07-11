@@ -1,68 +1,14 @@
-# ระบบ ERP ศูนย์การแพทย์ธรรมศาสตร์ (THAMC ERP)
-
-ระบบเสนอขออนุมัติงบประมาณ (BR) → ใบขอซื้อ (PR) → ติดตามการจัดซื้อ/จ่ายเงิน
-ที่ทำงานร่วมกับ SAP โดยไม่ต้อง Interface — เจ้าหน้าที่จัดซื้อกรอกเลขที่ PO
-ลงในระบบ แล้วระบบจะดึงข้อมูล SAP มาเดินไทม์ไลน์ต่อจนจบกระบวนการ
-
-บันทึกข้อมูลจริงบน **Supabase** (PostgreSQL) — ใช้งานหลายคนพร้อมกันได้
-
----
-
-## โครงสร้างไฟล์
-
-| ไฟล์ | คำอธิบาย |
-|------|----------|
-| `index.html` | ตัวระบบทั้งหมด (เปิดในเบราว์เซอร์ได้เลย) |
-| `support.js` | ไลบรารีรันไทม์ของหน้าเว็บ (ต้องอยู่คู่กับ index.html) |
-| `erp-data.js` | ข้อมูล SAP ตั้งต้น (PO/GR/ตั้งหนี้/จ่าย) + ข้อมูลตัวอย่าง BR/PR |
-| `assets/thamc_logo.jpg` | หัวกระดาษราชการ (ใช้บนเอกสาร BR/PR) |
-| `supabase-schema.sql` | สคริปต์สร้างตาราง BR/PR + เปิดสิทธิ์ (รันก่อน) |
-| `supabase-seed-sap.sql` | สคริปต์โหลดข้อมูล SAP จาก Excel ลงฐานข้อมูล (รันทีหลัง) |
-
----
-
-## วิธีติดตั้ง
-
-### 1) เตรียมฐานข้อมูล Supabase
-1. เข้า Supabase project → **SQL Editor** → **New query**
-2. วางเนื้อหาไฟล์ `supabase-schema.sql` ทั้งหมด → **Run** (สร้างตาราง `budget_requests`, `purchase_requests`, `item_code_requests`)
-3. (ทดสอบด้วยข้อมูลจริง) วางเนื้อหา `supabase-seed-sap.sql` → **Run**
-   (สร้าง `sap_po`, `sap_ap`, `sap_payment` + ใส่ข้อมูลจริงจาก Excel)
-
-### 2) ตั้งค่า connection (ถ้าเปลี่ยนโปรเจกต์)
-เปิด `index.html` แก้ 2 บรรทัดในคลาส `Component`:
-```js
-SUPA_URL='https://<PROJECT_REF>.supabase.co';
-SUPA_KEY='<anon public key>';
-```
-> ใช้ **anon public key** เท่านั้น (ปลอดภัยสำหรับฝั่งเว็บ) — อย่าใส่ service_role key
-
-### 3) เผยแพร่ (GitHub Pages)
-1. สร้าง repo ใหม่ → อัปโหลดไฟล์ทั้งหมด (คงโครงสร้างโฟลเดอร์ `assets/`)
-2. **Settings → Pages** → Source: `main` / root → Save
-3. เปิด URL ที่ได้ (เช่น `https://<user>.github.io/<repo>/`)
-
-ครั้งแรกที่เปิด ระบบจะเชื่อม Supabase อัตโนมัติ และถ้าตารางยังว่างจะเติมข้อมูลตัวอย่างให้
-มุมขวาบนจะแสดงสถานะ **"เชื่อมต่อ Supabase"** (เขียว) — คลิกที่ป้ายเพื่อเชื่อมต่อใหม่ได้
-
----
-
-## ฟังก์ชันหลัก
-
-- **ขออนุมัติงบประมาณ (BR)** → ผู้บริหารพิจารณา → งบประมาณจัดสรร (ตรวจ/ส่งออกรหัส Item Master Pro)
-- **Copy to PR** — สร้างใบขอซื้อจาก BR ที่ได้รับจัดสรรงบแล้ว
-- **พัสดุรับเรื่อง** → กรอกเลขที่ PO + แนบเอกสาร → ระบบดึง SAP เดินไทม์ไลน์ (รับของ/ตั้งหนี้/จ่าย) ต่อเอง
-- **แจ้งเตือนกำหนดทำ PR** — กระดิ่งมุมบนขวา แจ้งรายการที่ใกล้/เกินวันที่หน่วยงานต้องการใช้พัสดุ
-- **เอกสาร BR/PR** — ใบขออนุมัติงบประมาณ + ใบเสนอความต้องการซื้อ/จ้าง/เช่า (แบบฟอร์มราชการเดิม + หัวกระดาษ THAMC + QR ติดตามสถานะ + พิมพ์/บันทึก PDF)
-- **ติดตามสถานะ / สแกน QR** — ค้นเลขเอกสาร แสดงไทม์ไลน์เต็ม
-- **แดชบอร์ด** — ภาพรวม / งบประมาณ / จัดซื้อ / จ่ายเงิน
-- **Export Excel → SAP** — ส่งออกรหัส 19 คอลัมน์ ตามรูปแบบ import ของ SAP
-- **5 บทบาท** — ผู้ขอซื้อ / ผู้พิจารณางบ / พัสดุ-จัดซื้อ / การเงิน / ผู้บริหาร (สลับได้มุมบนขวา)
-- **รองรับมือถือ** เต็มรูปแบบ
-
----
-
-## หมายเหตุด้านความปลอดภัย
-
-สคริปต์ SQL เปิด Row Level Security แบบอนุญาต `anon` อ่าน/เขียนได้ (เหมาะกับช่วง **นำร่อง/ทดลอง**)
-ก่อนใช้งานจริงจัง ควรผูกกับระบบยืนยันตัวตน (Supabase Auth) และปรับ policy ให้จำกัดตาม `auth.uid()` / บทบาทผู้ใช้
+-- (ตัวเลือก) ทะเบียนออกรหัสพัสดุ — ใช้เป็น API รับส่งกับโปรแกรม Item Master Pro
+create table if not exists public.item_code_requests (
+  id          bigint generated always as identity primary key,
+  br_id       text,
+  item_name   text,
+  requested_by text,
+  code        text default '',
+  status      text default 'requested',   -- requested | issued
+  created_at  timestamptz default now()
+);
+alter table public.item_code_requests enable row level security;
+drop policy if exists "anon all icr" on public.item_code_requests;
+create policy "anon all icr" on public.item_code_requests
+  for all to anon using (true) with check (true);
