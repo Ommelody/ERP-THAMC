@@ -51,7 +51,7 @@ class Component extends DCLogic {
     exportModal:null,
     br:[], pr:[], loaded:false, online:false, sapOnline:false, notifOpen:false,
     authed:false, loginU:'', loginP:'', loginErr:'', prDraft:null,
-    icrRows:[], icrInput:{}, users:[], userForm:{username:'',password:'',name:'',role:'requester'}
+    icrRows:[], icrInput:{}, users:[], userForm:{username:'',password:'',name:'',role:'requester'}, brDraft:null
   };
   SUPA_URL='https://hkqyeeonfyzlbnimztuz.supabase.co';
   SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXllZW9uZnl6bGJuaW16dHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODU4NDMsImV4cCI6MjA5OTI2MTg0M30.Od-n8yNuIWu6Kx1Y_mW6Aemg3TRCxZG5ooTESpOgZBE';
@@ -120,7 +120,7 @@ class Component extends DCLogic {
     ]}
   ];
   navFor(){ const r=this.state.role; return this.NAV.map(z=>({zone:z.zone,items:z.items.filter(it=>r==='admin'||it.roles.includes(r))})).filter(z=>z.items.length); }
-  go(key){ this.setState({page:key,drawer:false,sel:null}); if(key==='item-pro') this.loadIcr(); if(key==='admin-users') this.loadUsers(); window.scrollTo&&window.scrollTo(0,0); }
+  go(key){ if(key==='br-create'&&!this.state.brDraft) this.setState({brDraft:this.newBrDraft()}); this.setState({page:key,drawer:false,sel:null}); if(key==='item-pro') this.loadIcr(); if(key==='admin-users') this.loadUsers(); window.scrollTo&&window.scrollTo(0,0); }
   switchRole(rk){ this.setState({role:rk,roleMenu:false,drawer:false,sel:null,selType:null,page:this.roleHome(rk),poTab:'all',payTab:'unpaid',regTab:'all'}); }
 
   badgeCount(kind){ if(!this.D)return 0;
@@ -213,6 +213,8 @@ class Component extends DCLogic {
   }
   fullThai(s){ if(!s) return '—'; const map={'ม.ค.':'มกราคม','ก.พ.':'กุมภาพันธ์','มี.ค.':'มีนาคม','เม.ย.':'เมษายน','พ.ค.':'พฤษภาคม','มิ.ย.':'มิถุนายน','ก.ค.':'กรกฎาคม','ส.ค.':'สิงหาคม','ก.ย.':'กันยายน','ต.ค.':'ตุลาคม','พ.ย.':'พฤศจิกายน','ธ.ค.':'ธันวาคม'}; const p=String(s).trim().split(/\s+/); if(p.length<3) return s; return p[0]+' '+(map[p[1]]||p[1])+' '+p[2]; }
   todayThai(){ const d=new Date(); const mo=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม']; return d.getDate()+' '+mo[d.getMonth()]+' '+(d.getFullYear()+543); }
+  thaiToIso(s){ const d=this.parseThai(s); if(!d) return ''; const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+  isoToThai(iso){ if(!iso) return ''; const m=String(iso).split('-'); if(m.length!==3) return iso; const mo=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return (+m[2])+' '+mo[+m[1]]+' '+((+m[0])+543); }
 
   // ---------- shell ----------
   shell(content){
@@ -515,9 +517,21 @@ class Component extends DCLogic {
       log:[{s:'Copy to PR — สร้างใบขอซื้อ',by:draft.requester,at:this.now()}]};
     this.insertPr(pr); if(draft.brId){ const b=this.brById(draft.brId); if(b) this.persistBr(Object.assign({},b,{prId:id})); }
     this.setState({prDraft:null,page:'my-requests',sel:id,selType:'pr'}); this.toastMsg('สร้างใบขอซื้อ '+id+' และส่งงานพัสดุแล้ว'); }
-  // ส่งคำขออนุมัติงบ (BR create)
-  submitBr(data){ const id='BR-'+this.ymCode()+'-'+String(1000+(this.state.br||[]).length+1).slice(1); const nb=Object.assign({kind:'br',id,at:this.now(),status:'รออนุมัติผู้บริหาร',prId:'',log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:data.requester,at:this.now()}]},data);
-    this.insertBr(nb); this.setState({brCreatedFlash:true,brCreatedId:id}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
+  // ส่งคำขออนุมัติจัดสรรงบ (BR) จากฟอร์มที่คีย์เอง
+  newBrDraft(){ return {requester:this.role().user.name,dept:'13ORD',dn:this.D.deptNames['13ORD']||'กลุ่มการพยาบาล',tel:'',pos:this.role().user.sub,reason:'',cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',procType:'ซื้อ',neededDate:'',budgetType:'งบดำเนินการ',budgetName:'',items:[{d:'',c:'',u:'',qty:1,price:0,total:0}],docs:[]}; }
+  updBr(patch){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,patch)})); }
+  updBrItem(i,patch){ this.setState(s=>{ const items=(s.brDraft.items||[]).slice(); items[i]=Object.assign({},items[i],patch); if('qty' in patch||'price' in patch) items[i].total=(+items[i].qty||0)*(+items[i].price||0); return {brDraft:Object.assign({},s.brDraft,{items})}; }); }
+  addBrItem(){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,{items:(s.brDraft.items||[]).concat([{d:'',c:'',u:'',qty:1,price:0,total:0}])})})); }
+  delBrItem(i){ this.setState(s=>{ const items=(s.brDraft.items||[]).slice(); items.splice(i,1); if(!items.length)items.push({d:'',c:'',u:'',qty:1,price:0,total:0}); return {brDraft:Object.assign({},s.brDraft,{items})}; }); }
+  addBrDoc(){ const names=['ใบเสนอราคา.pdf','สเปคพัสดุ.pdf','ใบเปรียบเทียบราคา.pdf','หนังสือขออนุมัติ.pdf']; const cur=(this.state.brDraft.docs||[]); this.updBr({docs:cur.concat([names[cur.length%names.length]])}); }
+  submitBr(){ const d=this.state.brDraft; if(!d) return;
+    if(!(d.items||[]).some(it=>it.d&&it.total>0)){ this.toastMsg('กรุณากรอกรายการที่ขออนุมัติอย่างน้อย 1 รายการ'); return; }
+    if(!d.reason){ this.toastMsg('กรุณากรอกเหตุผล/ความจำเป็น'); return; }
+    if(!d.neededDate){ this.toastMsg('กรุณาระบุวันที่ต้องการใช้'); return; }
+    const value=(d.items||[]).reduce((a,it)=>a+(it.total||0),0); const first=d.items.find(it=>it.d&&it.total>0)||d.items[0];
+    const id='BR-'+this.ymCode()+'-'+String(1000+(this.state.br||[]).length+1).slice(1);
+    const nb={kind:'br',id,at:this.now(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:d.cat,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetName:d.budgetName||d.cat,prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
+    this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
   // พัสดุรับเรื่อง (เลือกเงื่อนไข)
   prReceive(id,cond){ const p=(this.state.pr||[]).find(x=>x.id===id); if(!p)return; this.persistPr(Object.assign({},p,{status:'พัสดุรับเรื่อง',condition:cond,log:(p.log||[]).concat([{s:'พัสดุรับเรื่อง',by:this.role().user.name,at:this.now(),note:cond}])})); this.toastMsg('รับเรื่องแล้ว · เงื่อนไข: '+cond); }
   // ตรวจสอบเอกสาร PO — กรอกเลข PO + อัปโหลด → ดึง SAP เดินไทม์ไลน์ต่อ
@@ -798,44 +812,64 @@ class Component extends DCLogic {
   }
 
   pgBrCreate(){
-    const h=React.createElement; const R=this.R; const role=this.role();
-    const item={name:'\u0e40\u0e04\u0e23\u0e37\u0e48\u0e2d\u0e07\u0e27\u0e31\u0e14\u0e04\u0e27\u0e32\u0e21\u0e14\u0e31\u0e19\u0e42\u0e25\u0e2b\u0e34\u0e15\u0e2d\u0e31\u0e15\u0e42\u0e19\u0e21\u0e31\u0e15\u0e34',qty:4,unit:'\u0e40\u0e04\u0e23\u0e37\u0e48\u0e2d\u0e07',price:8900,cat:'\u0e04\u0e23\u0e38\u0e20\u0e31\u0e13\u0e11\u0e4c'};
-    const value=item.qty*item.price; const pool=this.poolFor('13ORD','\u0e04\u0e23\u0e38\u0e20\u0e31\u0e13\u0e11\u0e4c')||this.D.pools[0]; const remain=pool.alloc-pool.committed;
+    const h=React.createElement; const R=this.R; const d=this.state.brDraft||this.newBrDraft();
+    const value=(d.items||[]).reduce((a,it)=>a+(it.total||0),0);
+    const pool=this.poolFor(d.dept,d.cat)||this.D.pools[0]; const remain=pool?pool.alloc-pool.committed:0;
+    const lab=(t,req)=>h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},t,req?h('span',{style:{color:this.RED}},' *'):null);
+    const box=(labEl,inner,full)=>h('div',{style:{gridColumn:full?'1/-1':'auto'}},labEl,inner);
+    const roo=(v)=>h('div',{style:{fontSize:13.5,color:this.INK,background:this.PANEL,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px'}},v);
+    const inp=(v,on,ph)=>h('input',{value:v||'',placeholder:ph||'',onChange:e=>on(e.target.value),style:{width:'100%',fontSize:13.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',outline:'none'}});
+    const sel=(v,opts,on)=>h('select',{value:v,onChange:e=>on(e.target.value),style:{width:'100%',fontSize:13.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',background:'#fff',cursor:'pointer'}},opts.map(o=>h('option',{key:o,value:o},o)));
     const sec=(n,t,body)=> this.card(h('div',{style:{padding:R.isMobile?'16px':'20px 22px'}},
       h('div',{style:{fontSize:14.5,fontWeight:600,borderBottom:'1px solid '+this.LINE,paddingBottom:11,marginBottom:16,display:'flex',alignItems:'center',gap:9}},
         h('span',{style:{color:this.BLUE,fontFamily:"'IBM Plex Mono',monospace"}},n),t), body),{marginBottom:16});
-    const field=(label,val,req,full)=> h('div',{style:{gridColumn:full?'1/-1':'auto'}},
-      h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},label,req?h('span',{style:{color:this.RED}},' *'):null),
-      h('div',{style:{fontSize:13.5,background:this.PANEL,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px'}},val));
-    return h('div',{style:{maxWidth:900,margin:'0 auto'}},
+    const gcol='1fr 96px 58px 64px 96px 96px 30px';
+    const rows=(d.items||[]).map((it,i)=>h('div',{key:i,style:{display:'grid',gridTemplateColumns:gcol,padding:'8px 12px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',gap:5}},
+      h('input',{value:it.d||'',placeholder:'ชื่อรายการ…',onChange:e=>this.updBrItem(i,{d:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 9px',fontSize:12.5,outline:'none'}}),
+      h('input',{value:it.c||'',placeholder:'รหัส',onChange:e=>this.updBrItem(i,{c:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:11.5,outline:'none',fontFamily:"'IBM Plex Mono',monospace"}}),
+      h('input',{value:it.qty,onChange:e=>this.updBrItem(i,{qty:e.target.value.replace(/[^0-9.]/g,'')}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 6px',fontSize:12.5,outline:'none',textAlign:'center'}}),
+      h('input',{value:it.u||'',placeholder:'หน่วย',onChange:e=>this.updBrItem(i,{u:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 7px',fontSize:12,outline:'none'}}),
+      h('input',{value:it.price,onChange:e=>this.updBrItem(i,{price:e.target.value.replace(/[^0-9.]/g,'')}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:12.5,outline:'none',textAlign:'right',fontFamily:"'IBM Plex Mono',monospace"}}),
+      h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.fmtN(it.total)),
+      h('div',{onClick:()=>this.delBrItem(i),style:{textAlign:'center',color:this.RED,cursor:'pointer',fontSize:15}},'✕')));
+    return h('div',{style:{maxWidth:920,margin:'0 auto'}},
       h('div',{style:{background:this.BLUEBG,border:'1px solid #c5dcf0',borderRadius:12,padding:'12px 16px',marginBottom:16,fontSize:12.5,color:'#215c96',display:'flex',gap:9,alignItems:'flex-start'}},
-        h('span',null,'\u2139'),h('div',null,'\u0e02\u0e31\u0e49\u0e19\u0e15\u0e2d\u0e19\u0e41\u0e23\u0e01\u0e02\u0e2d\u0e07\u0e23\u0e30\u0e1a\u0e1a: \u0e2b\u0e19\u0e48\u0e27\u0e22\u0e07\u0e32\u0e19\u0e40\u0e2a\u0e19\u0e2d\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e40\u0e1e\u0e37\u0e48\u0e2d',h('b',null,'\u0e02\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13 (BR)'),' \u0e01\u0e48\u0e2d\u0e19 \u0e40\u0e21\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e1a\u0e23\u0e34\u0e2b\u0e32\u0e23\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e41\u0e25\u0e30\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e41\u0e25\u0e49\u0e27 \u0e08\u0e36\u0e07\u0e01\u0e14 ',h('b',null,'Copy to PR'),' \u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e43\u0e1a\u0e02\u0e2d\u0e0b\u0e37\u0e49\u0e2d')),
-      this.state.brCreatedFlash? h('div',{style:{background:this.GREENBG,border:'1px solid '+this.GREEN,color:this.GREEN,borderRadius:12,padding:'13px 16px',marginBottom:16,fontSize:13,display:'flex',alignItems:'center',gap:9}},h('span',null,'\u2713'),'\u0e2a\u0e48\u0e07\u0e04\u0e33\u0e02\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13\u0e41\u0e25\u0e49\u0e27 \u2014 \u0e01\u0e33\u0e25\u0e31\u0e07\u0e2a\u0e48\u0e07\u0e43\u0e2b\u0e49\u0e1c\u0e39\u0e49\u0e1a\u0e23\u0e34\u0e2b\u0e32\u0e23\u0e1e\u0e34\u0e08\u0e32\u0e23\u0e13\u0e32'):null,
-      sec('01','\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e1c\u0e39\u0e49\u0e02\u0e2d / \u0e04\u0e33\u0e02\u0e2d',
+        h('span',null,'ℹ'),h('div',null,'ขั้นตอนแรกของระบบ: หน่วยงานเสนอรายการเพื่อ ',h('b',null,'ขออนุมัติจัดสรรงบ (BR)'),' → ผู้บริหารอนุมัติ → งบประมาณจัดสรร → กด ',h('b',null,'Copy to PR'),' เพื่อสร้างใบขอซื้อ')),
+      this.state.brCreatedFlash? h('div',{style:{background:this.GREENBG,border:'1px solid '+this.GREEN,color:this.GREEN,borderRadius:12,padding:'13px 16px',marginBottom:16,fontSize:13,display:'flex',alignItems:'center',gap:9}},h('span',null,'✓'),'ส่งคำขอ '+(this.state.brCreatedId||'')+' แล้ว — ส่งให้ผู้บริหารพิจารณา (ฟอร์มพร้อมคีย์คำขอใหม่)'):null,
+      sec('01','ข้อมูลผู้ขอ / คำขอ',
         h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr 1fr',gap:14}},
-          field('\u0e0a\u0e37\u0e48\u0e2d\u0e1c\u0e39\u0e49\u0e02\u0e2d',role.user.name,true),field('\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e07\u0e32\u0e19','\u0e01\u0e25\u0e38\u0e48\u0e21\u0e01\u0e32\u0e23\u0e1e\u0e22\u0e32\u0e1a\u0e32\u0e25 (13ORD)',true),field('\u0e40\u0e1a\u0e2d\u0e23\u0e4c\u0e15\u0e34\u0e14\u0e15\u0e48\u0e2d','02-926-9111'),
-          field('\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25/\u0e04\u0e27\u0e32\u0e21\u0e08\u0e33\u0e40\u0e1b\u0e47\u0e19','\u0e17\u0e14\u0e41\u0e17\u0e19\u0e40\u0e04\u0e23\u0e37\u0e48\u0e2d\u0e07\u0e27\u0e31\u0e14\u0e04\u0e27\u0e32\u0e21\u0e14\u0e31\u0e19\u0e17\u0e35\u0e48\u0e0a\u0e33\u0e23\u0e38\u0e14 \u0e23\u0e2d\u0e07\u0e23\u0e31\u0e1a\u0e1c\u0e39\u0e49\u0e1b\u0e48\u0e27\u0e22\u0e40\u0e1e\u0e34\u0e48\u0e21',true,true),
-          field('\u0e2b\u0e21\u0e27\u0e14\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13',item.cat,true),field('\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17','\u0e0b\u0e37\u0e49\u0e2d',true),field('\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e32\u0e23\u0e43\u0e0a\u0e49','28 \u0e01.\u0e04. 2569'))),
-      sec('02','\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e17\u0e35\u0e48\u0e02\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34',
+          box(lab('ชื่อผู้ขอ',true),roo(d.requester)),
+          box(lab('หน่วยงาน',true),roo(d.dn+' ('+d.dept+')')),
+          box(lab('เบอร์ติดต่อ'),inp(d.tel,v=>this.updBr({tel:v}),'02-xxx-xxxx')),
+          box(lab('เหตุผล/ความจำเป็น',true),h('textarea',{value:d.reason||'',placeholder:'ชี้แจงเหตุผลความจำเป็น…',onChange:e=>this.updBr({reason:e.target.value}),style:{width:'100%',minHeight:58,fontSize:13.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',outline:'none',resize:'vertical',fontFamily:'inherit'}}),true),
+          box(lab('หมวดงบประมาณ',true),sel(d.cat,(this.D.exps||['ค่าวัสดุการแพทย์']),v=>this.updBr({cat:v}))),
+          box(lab('ประเภท',true),sel(d.procType,['ซื้อ','จ้าง','เช่า'],v=>this.updBr({procType:v}))),
+          box(lab('วันที่ต้องการใช้',true),h('input',{type:'date',value:this.thaiToIso(d.neededDate),onChange:e=>this.updBr({neededDate:this.isoToThai(e.target.value)}),style:{width:'100%',fontSize:13.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'9px 12px',outline:'none',fontFamily:'inherit',color:this.INK}})))),
+      sec('02','รายการที่ขออนุมัติ',
         h('div',null,
-          h('div',{style:{border:'1px solid '+this.LINE,borderRadius:10,overflow:'hidden'}},
-            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 70px 70px 100px',padding:'10px 13px',background:this.PANEL,fontSize:11,fontWeight:600,color:this.MUTE}},h('div',null,'\u0e0a\u0e37\u0e48\u0e2d\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23'),h('div',{style:{textAlign:'center'}},'\u0e08\u0e33\u0e19\u0e27\u0e19'),h('div',{style:{textAlign:'center'}},'\u0e2b\u0e19\u0e48\u0e27\u0e22'),h('div',{style:{textAlign:'right'}},'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e07\u0e32\u0e19')),
-            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 70px 70px 100px',padding:'11px 13px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center'}},h('div',null,item.name),h('div',{style:{textAlign:'center'}},item.qty),h('div',{style:{textAlign:'center'}},item.unit),h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.fmtN(value)))),
+          h('div',{style:{border:'1px solid '+this.LINE,borderRadius:10,overflow:'hidden',overflowX:'auto'}},
+            h('div',{style:{minWidth:R.isMobile?560:'auto'}},
+              h('div',{style:{display:'grid',gridTemplateColumns:gcol,padding:'9px 12px',background:this.PANEL,fontSize:11,fontWeight:600,color:this.MUTE}},['ชื่อรายการ','รหัส','จำนวน','หน่วย','ราคา/หน่วย','มูลค่า',''].map((c,i)=>h('div',{key:i,style:{textAlign:i===2||i>=4?'right':'left'}},c))),
+              rows)),
           h('div',{style:{display:'flex',justifyContent:'space-between',marginTop:14,flexWrap:'wrap',gap:12}},
-            h('span',{style:{fontSize:12.5,color:this.BLUE,fontWeight:600,border:'1px dashed '+this.BLUE,padding:'8px 14px',borderRadius:9,cursor:'pointer'}},'\uff0b \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23'),
-            h('div',{style:{display:'flex',gap:10,alignItems:'center'}},h('span',{style:{fontSize:12.5,color:this.MUTE}},'\u0e44\u0e1f\u0e25\u0e4c\u0e41\u0e19\u0e1a:'),h('span',{style:{fontSize:12,background:this.PANEL,border:'1px solid '+this.LINE,borderRadius:8,padding:'7px 11px'}},'\uD83D\uDCCE \u0e43\u0e1a\u0e40\u0e2a\u0e19\u0e2d\u0e23\u0e32\u0e04\u0e32.pdf'))))),
-      sec('03','\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d',
+            h('span',{onClick:()=>this.addBrItem(),style:{fontSize:12.5,color:this.BLUE,fontWeight:600,border:'1px dashed '+this.BLUE,padding:'8px 14px',borderRadius:9,cursor:'pointer'}},'＋ เพิ่มรายการ'),
+            h('div',{style:{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}},
+              h('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},h('span',{style:{fontSize:12.5,color:this.MUTE}},'ไฟล์แนบ:'),
+                (d.docs||[]).map((dc,i)=>h('span',{key:i,style:{fontSize:11.5,background:this.BLUEBG,color:'#215c96',borderRadius:8,padding:'6px 10px',display:'inline-flex',gap:5,alignItems:'center'}},'📎 '+dc,h('span',{onClick:()=>this.updBr({docs:d.docs.filter((_,j)=>j!==i)}),style:{cursor:'pointer',color:this.RED}},'✕'))),
+                h('span',{onClick:()=>this.addBrDoc(),style:{fontSize:11.5,border:'1px dashed '+this.LINE,borderRadius:8,padding:'6px 10px',cursor:'pointer',color:this.MUTE}},'⬆ แนบไฟล์')),
+              h('div',{style:{fontSize:15,fontWeight:700}},'รวม ',h('span',{style:{color:this.BLUE,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(value))))))),
+      sec('03','ตรวจสอบงบประมาณคงเหลือ',
         h('div',null,
-          h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:8,flexWrap:'wrap',gap:6}},h('span',{style:{color:this.MUTE}},item.cat+' \u00b7 '+this.D.deptNames['13ORD']),h('span',{style:{fontFamily:"'IBM Plex Mono',monospace"}},'\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d ',h('b',{style:{color:remain>=value?this.GREEN:this.RED}},this.baht(remain)))),
-          this.track2(pool.committed+value,pool.alloc,pool.committed+value>pool.alloc),
-          h('div',{style:{fontSize:12,color:remain>=value?this.GREEN:this.RED,marginTop:9}},remain>=value?'\u2713 \u0e07\u0e1a\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e04\u0e33\u0e02\u0e2d\u0e19\u0e35\u0e49':'\u26a0 \u0e07\u0e1a\u0e44\u0e21\u0e48\u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d'))),
+          h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:8,flexWrap:'wrap',gap:6}},h('span',{style:{color:this.MUTE}},d.cat+' · '+d.dn),h('span',{style:{fontFamily:"'IBM Plex Mono',monospace"}},'คงเหลือ ',h('b',{style:{color:remain>=value?this.GREEN:this.RED}},this.baht(remain)))),
+          this.track2((pool?pool.committed:0)+value,pool?pool.alloc:1,((pool?pool.committed:0)+value)>(pool?pool.alloc:0)),
+          h('div',{style:{fontSize:12,color:remain>=value?this.GREEN:this.RED,marginTop:9}},remain>=value?'✓ งบเพียงพอสำหรับคำขอนี้':'⚠ งบไม่เพียงพอ — เกินวงเงินคงเหลือ'))),
       h('div',{style:{display:'flex',justifyContent:'flex-end',gap:12,flexWrap:'wrap'}},
-        h('button',{style:{fontSize:14,color:this.MUTE,padding:'12px 24px',borderRadius:11,border:'1px solid '+this.LINE,background:'#fff',cursor:'pointer'}},'\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e23\u0e48\u0e32\u0e07'),
-        h('button',{onClick:()=>this.submitBr({requester:role.user.name,dept:'13ORD',dn:this.D.deptNames['13ORD'],tel:'02-926-9111',pos:role.user.sub,itemName:item.name,reason:'ทดแทนเครื่องวัดความดันที่ชำรุดในหอผู้ป่วย รองรับผู้ป่วยเพิ่ม',qty:item.qty,unit:item.unit,value:value,neededDate:'28 ก.ค. 2569',cat:item.cat,procType:'ซื้อ',med:true,hasCode:false,code:'',budgetType:'งบลงทุน',budgetName:'งบลงทุน–ครุภัณฑ์การแพทย์'}),style:{fontSize:14,fontWeight:600,color:'#fff',padding:'12px 30px',borderRadius:11,background:this.BLUE,border:'none',cursor:'pointer'}},'ส่งขออนุมัติงบ')));
+        h('button',{onClick:()=>this.setState({brDraft:this.newBrDraft(),brCreatedFlash:false}),style:{fontSize:14,color:this.MUTE,padding:'12px 24px',borderRadius:11,border:'1px solid '+this.LINE,background:'#fff',cursor:'pointer'}},'ล้างฟอร์ม'),
+        h('button',{onClick:()=>this.submitBr(),style:{fontSize:14,fontWeight:600,color:'#fff',padding:'12px 30px',borderRadius:11,background:this.BLUE,border:'none',cursor:'pointer'}},'ส่งขออนุมัติจัดสรรงบ')));
   }
 
   pgMyRequests(){
-    const h=React.createElement; const R=this.R; const mine=this.myRequests(); const all=mine.brs.concat(mine.prs);
+    const h=React.createElement; const R=this.R; const mine=this.myRequests(); const all=mine.brs.filter(b=>!b.prId).concat(mine.prs);
     return h('div',null,
       this.kpiGrid([
         {label:'\u0e04\u0e33\u0e02\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e07\u0e1a (BR)',val:this.fmtN(mine.brs.length),unit:'\u0e04\u0e33\u0e02\u0e2d',accent:this.BLUE,c:this.BLUE},
@@ -860,6 +894,7 @@ class Component extends DCLogic {
           h('div',{style:{textAlign:'right'}},h('div',{style:{fontSize:18,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(val)))),
         this.miniTimelineU(rec)),
       h('div',{style:{display:'flex',gap:9,marginTop:14,flexWrap:'wrap',justifyContent:'flex-end'}},
+        (rec.brId? h('button',{onClick:()=>this.setState({docModal:rec.brId,docType:'br'}),style:{padding:'8px 14px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',color:this.INK}},'เอกสาร BR'):null),
         h('button',{onClick:()=>this.setState({docModal:rec.id,docType:rec.kind}),style:{padding:'8px 14px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',color:this.INK}},'\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23'),
         canCopy? h('button',{onClick:()=>this.copyToPr(rec.id),style:{padding:'8px 18px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'Copy to PR'):null)));
   }
@@ -1628,11 +1663,13 @@ class Component extends DCLogic {
             h('button',{onClick:()=>this.printDoc(),style:{padding:'7px 14px',border:'none',background:'#fff',color:this.INK,borderRadius:8,fontSize:12,cursor:'pointer',fontWeight:600}},'พิมพ์ / บันทึก PDF'),
             h('button',{onClick:close,style:{padding:'7px 12px',border:'none',background:'rgba(255,255,255,.2)',color:'#fff',borderRadius:8,fontSize:14,cursor:'pointer'}},'✕'))),
         h('div',{id:'printDoc',style:{background:'#fff',borderRadius:6,padding:R.isMobile?'22px 18px':'40px 44px',boxShadow:'0 24px 60px rgba(10,25,22,.4)'}},
-          h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:16,borderBottom:'2px solid '+this.INK,paddingBottom:12,marginBottom:14}},
-            h('img',{src:'assets/thamc_logo.jpg',alt:'THAMC',style:{height:R.isMobile?44:54,objectFit:'contain'}}),
-            h('div',{style:{textAlign:'center',flexShrink:0}},this.qrMatrix(rec.id,R.isMobile?74:92),h('div',{style:{fontSize:9,color:this.MUTE,marginTop:3,fontFamily:"'IBM Plex Mono',monospace"}},'สแกนติดตามสถานะ'))),
+          h('div',{style:{borderBottom:'2px solid '+this.INK,paddingBottom:12,marginBottom:14}},
+            h('img',{src:'assets/thamc_logo.jpg',alt:'THAMC',style:{width:'100%',maxHeight:R.isMobile?66:88,objectFit:'contain',objectPosition:'left center',display:'block'}})),
           br?brBody:prBody,
-          h('div',{style:{display:'flex',justifyContent:'space-around',gap:20,marginTop:26,flexWrap:'wrap'}},
+          h('div',{style:{display:'flex',alignItems:'flex-end',gap:14,marginTop:22}},
+            h('div',{style:{textAlign:'center'}},this.qrMatrix(rec.id,R.isMobile?72:88),h('div',{style:{fontSize:9,color:this.MUTE,marginTop:3,fontFamily:"'IBM Plex Mono',monospace"}},'สแกนติดตามสถานะ')),
+            h('div',{style:{flex:1,fontSize:10.5,color:this.MUTE,lineHeight:1.6}},'เลขที่เอกสาร '+rec.id+' · ออกจากระบบ ERP ศูนย์การแพทย์ธรรมศาสตร์',h('br'),'พิมพ์เมื่อ '+this.todayThai())),
+          h('div',{style:{display:'flex',justifyContent:'space-around',gap:20,marginTop:22,flexWrap:'wrap'}},
             signers.map((sg,i)=>h('div',{key:i,style:{flex:'1 1 30%',textAlign:'center',minWidth:150}},
               h('div',{style:{fontSize:12.5}},'(ลงชื่อ)'),
               h('div',{style:{borderBottom:'1px dotted #333',height:30,margin:'2px 10px 6px'}}),
