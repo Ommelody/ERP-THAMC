@@ -85,7 +85,7 @@ class Component extends DCLogic {
     const t=()=>{ if(window.ERPDATA){ this.D=window.ERPDATA; this.D.po=[]; this.D.ap=[]; this.D.pay=[]; this.setState({ready:true,vw:this._winW(),page:this.roleHome('requester')}); this.loadDb(); } else setTimeout(t,60); };
     t();
   }
-  componentWillUnmount(){ if(this._onResize) window.removeEventListener('resize',this._onResize); }
+  componentWillUnmount(){ if(this._onResize) window.removeEventListener('resize',this._onResize); if(this._ipPoll) clearInterval(this._ipPoll); }
 
   // ---------- format ----------
   fmtN(n){ return Math.round(n||0).toLocaleString('en-US'); }
@@ -499,8 +499,20 @@ class Component extends DCLogic {
       this.toastMsg('เชื่อมต่อฐานข้อมูล Supabase สำเร็จ — พร้อมคีย์ข้อมูลจริง');
       this.setState({br:(br||[]).map(x=>this.brFromDb(x)), pr:(pr||[]).map(x=>this.prFromDb(x)), loaded:true, online:true});
       this.loadUsers(sb);
+      this.syncItemPro(); this.startItemProPoll();
     }catch(err){ console.warn('supabase load failed',err); this.toastMsg('ยังไม่ได้สร้างตารางใน Supabase — ใช้โหมดสาธิตชั่วคราว'); fallback(); }
   }
+  // ดึงรหัสที่ Item Pro ออกให้แล้ว (status=issued) กลับเข้าระบบอัตโนมัติ — แก้ปัญหา "ส่งกลับมาแล้วเงียบ"
+  async syncItemPro(silent){ const sb=this._sb; if(!sb||!this.state.online) return;
+    try{ const r=await sb.from('item_code_requests').select('*').eq('status','issued'); if(r.error||!r.data) return;
+      let applied=0;
+      r.data.forEach(row=>{ if(!row.code||!row.br_id) return; const b=this.brById(row.br_id);
+        if(b && b.status==='รอออกรหัสพัสดุ'){ this.brReceiveCode(b.id,row.code); applied++; } });
+      if(applied>0) this.toastMsg('รับรหัสจาก Item Pro '+applied+' รายการ — เดินขั้นตอนต่อแล้ว');
+      else if(!silent) this.toastMsg('ยังไม่มีรหัสใหม่จาก Item Pro');
+    }catch(e){ console.warn('syncItemPro',e); }
+  }
+  startItemProPoll(){ if(this._ipPoll) return; this._ipPoll=setInterval(()=>{ if(this.state.online) this.syncItemPro(true); }, 20000); }
   async fetchAll(sb,table){ let out=[],from=0,step=1000;
     while(true){ const r=await sb.from(table).select('*').range(from,from+step-1); if(r.error){ return from===0?null:out; } const rows=r.data||[]; out=out.concat(rows); if(rows.length<step) break; from+=step; }
     return out; }
@@ -1625,7 +1637,7 @@ class Component extends DCLogic {
         {label:'ช่องทาง',val:'REST',accent:this.BLUE,sub:'item_code_requests'}
       ],4),
       this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
-        this.secTitle('ปลายทาง API — Item Master Pro', h('button',{onClick:()=>this.loadIcr(),style:{padding:'7px 14px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:8,fontSize:12,cursor:'pointer',color:this.TEAL,fontWeight:600}},'⟳ รีเฟรช')),
+        this.secTitle('ปลายทาง API — Item Master Pro', h('button',{onClick:()=>{this.loadIcr();this.syncItemPro();},style:{padding:'7px 14px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:8,fontSize:12,cursor:'pointer',color:this.TEAL,fontWeight:600}},'⟳ รีเฟรช')),
         h('div',{style:{fontSize:12.5,color:this.MUTE,lineHeight:1.7,marginBottom:12}},'โปรแกรม Item Pro รับ–ส่งคำขอออกรหัสพัสดุผ่าน REST API ของฐานข้อมูลนี้ — เมื่อฝั่งงบประมาณ "ส่งออกรหัส" ระบบจะเขียนคำขอ (status=requested) เมื่อ Item Pro ออกรหัสเสร็จให้อัปเดต (status=issued, code) รายการจะถูกส่งกลับเข้าคำขอ BR อัตโนมัติ'),
         h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'auto 1fr',gap:'8px 14px',fontSize:12,background:this.PANEL,borderRadius:10,padding:'13px 15px',fontFamily:"'IBM Plex Mono',monospace"}},
           h('div',{style:{color:this.MUTE}},'POST'),h('div',{style:{wordBreak:'break-all',color:this.INK}},endpoint),
