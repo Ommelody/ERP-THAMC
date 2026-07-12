@@ -579,10 +579,20 @@ class Component extends DCLogic {
     } else {
       // 2) ไม่มี endpoint → ใช้ตาราง item_code_requests บน Supabase เป็นช่องทาง API
       this._icrFallback(payload);
-      this.toastMsg('ส่งคำขอออกรหัสเข้าคิว Item Master Pro แล้ว');
     }
   }
-  _icrFallback(payload){ const sb=this._sb; if(sb&&this.state.online){ sb.from('item_code_requests').insert(payload).then(r=>{ if(r&&r.error)console.warn(r.error); }); } }
+  _icrFallback(payload){ const sb=this._sb;
+    if(!sb||!this.state.online){ this.toastMsg('อยู่ในโหมดสาธิต — บันทึกคำขอในเครื่องแล้ว (ยังไม่ส่งขึ้นฐานข้อมูล)'); return; }
+    sb.from('item_code_requests').insert(payload).then(r=>{
+      if(r&&r.error){
+        // ตารางเดิมอาจยังไม่มีคอลัมน์ใหม่ — ลองส่งเฉพาะคอลัมน์พื้นฐาน
+        const base={br_id:payload.br_id,item_name:payload.item_name,requested_by:payload.requested_by,status:'requested'};
+        sb.from('item_code_requests').insert(base).then(r2=>{
+          if(r2&&r2.error){ console.warn(r2.error); this.toastMsg('ส่งไม่สำเร็จ: '+(r2.error.message||'ตรวจสอบตาราง item_code_requests / สิทธิ์ RLS')); }
+          else this.toastMsg('ส่งคำขอออกรหัสเข้าคิว Item Pro แล้ว (โหมดคอลัมน์พื้นฐาน — แนะนำรัน ALTER เพิ่มคอลัมน์)');
+        });
+      } else { this.toastMsg('ส่งคำขอออกรหัสเข้าคิว Item Master Pro แล้ว ✓'); }
+    }); }
   brReceiveCode(id,code){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'รอเจ้าหน้าที่งบประมาณรับทราบ',code:code,hasCode:true,log:(b.log||[]).concat([{s:'รับรหัสจาก Item Pro',by:'ระบบ Item Master Pro',at:this.now(),note:'ออกรหัส '+code+' เรียบร้อย'}])})); this.setState({itemProModal:null}); this.toastMsg('รับรหัส '+code+' จาก Item Pro แล้ว'); }
   // Copy to PR — สร้างใบขอซื้อจาก BR ที่จัดสรรงบแล้ว
   ymCode(){ const d=new Date(); return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0'); }
