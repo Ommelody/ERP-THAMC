@@ -996,7 +996,7 @@ class Component extends DCLogic {
     // ค่าใช้จ่ายจริง = ใบตั้งหนี้ (AP) ซึ่งเป็นภาระที่เกิดขึ้นจริง แยกตามหน่วยงาน + ประเภทค่าใช้จ่าย (exp)
     const ap=D.ap||[]; const totAp=ap.reduce((s,r)=>s+(+r.val||0),0);
     // จัดกลุ่มตามหน่วยงาน (dept) — ใช้ dept ของ PO/AP
-    const byDept={}; ap.forEach(r=>{ const k=r.dept||'(ไม่ระบุ)'; const e=byDept[k]||(byDept[k]={k,name:r.dn||this.deptName(k),val:0,cnt:0,exps:{}}); e.val+=(+r.val||0); e.cnt++;
+    const byDept={}; ap.forEach(r=>{ const k=r.dept||'(ไม่ระบุ)'; const rn=(this.D.deptNames&&this.D.deptNames[k])||''; const e=byDept[k]||(byDept[k]={k,name:k,fullName:rn,val:0,cnt:0,exps:{}}); e.val+=(+r.val||0); e.cnt++;
       const ex=r.exp||'อื่นๆ'; e.exps[ex]=(e.exps[ex]||0)+(+r.val||0); });
     const depts=Object.values(byDept).sort((a,b)=>b.val-a.val);
     // จัดกลุ่มตามประเภทค่าใช้จ่าย (exp)
@@ -1025,7 +1025,7 @@ class Component extends DCLogic {
           depts.map(d=>{ const pct=totAp? Math.round(d.val/totAp*100):0; const open=sel===d.k;
             return h('div',{key:d.k},
               h('div',{onClick:()=>this.setState({costDept:open?'':d.k}),style:{cursor:'pointer',display:'grid',gridTemplateColumns:'1fr 90px 160px 150px',padding:'10px 12px',borderBottom:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',background:open?'#f8fafa':'#fff'}},
-                h('div',{style:{minWidth:0,display:'flex',alignItems:'center',gap:7}},h('span',{style:{color:this.MUTE,fontSize:10}},open?'▼':'▶'),h('span',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},d.name)),
+                h('div',{style:{minWidth:0,display:'flex',alignItems:'center',gap:7}},h('span',{style:{color:this.MUTE,fontSize:10}},open?'▼':'▶'),h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},d.k),d.fullName?h('span',{style:{fontSize:11,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},d.fullName):null),
                 h('div',{style:{textAlign:'center',fontFamily:"'IBM Plex Mono',monospace"}},d.cnt),
                 h('div',null,this.track2(d.val,depts[0].val,false),h('span',{style:{fontSize:10.5,color:this.MUTE}},pct+'%')),
                 h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:700}},this.baht(d.val))),
@@ -1350,7 +1350,9 @@ class Component extends DCLogic {
   pgPoVerify(){
     const h=React.createElement; const R=this.R;
     const waiting=this.prs().filter(p=>['\u0e1e\u0e31\u0e2a\u0e14\u0e38\u0e23\u0e31\u0e1a\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07','\u0e01\u0e33\u0e25\u0e31\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23\u0e08\u0e31\u0e14\u0e0b\u0e37\u0e49\u0e2d'].includes(p.status));
-    const rows=this.poFiltered().slice(0,12);
+    const q=(this.state.poQ||'').trim().toLowerCase();
+    let sysRows=this.prs().filter(p=>{ if(!q) return true; const hay=((p.id||'')+' '+(p.po||'')+' '+(p.brId||'')+' '+((p.items&&p.items[0]&&p.items[0].d)||'')+' '+(p.dn||'')).toLowerCase(); return hay.indexOf(q)>=0; });
+    sysRows=sysRows.sort((a,b)=>(b.at||'').localeCompare(a.at||''));
     return h('div',null,
       this.kpiGrid([
         {label:'\u0e23\u0e2d\u0e01\u0e23\u0e2d\u0e01\u0e40\u0e25\u0e02 PO',val:this.fmtN(waiting.length),unit:'\u0e43\u0e1a',accent:this.AMBER,c:this.AMBER},
@@ -1370,9 +1372,24 @@ class Component extends DCLogic {
         h('button',{onClick:()=>window.open('https://ommelody.github.io/PO-Tracking-Dashboard/','_blank'),style:{padding:'10px 18px',border:'1px solid '+this.TEAL,background:this.TEAL,color:'#fff',borderRadius:10,fontSize:12.5,cursor:'pointer',fontWeight:600}},'ดูทั้งหมดในระบบ PO Tracking ↗')),{marginBottom:16}),
       this.card(h('div',null,
         h('div',{style:{padding:R.isMobile?'12px 14px':'12px 18px',borderBottom:'1px solid '+this.LINE,display:'flex',gap:12,alignItems:'center',flexWrap:'wrap'}},
-          h('div',{style:{fontSize:15,fontWeight:700,marginRight:'auto'}},'\u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e43\u0e1a\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d (SAP)'),
-          h('div',{style:{position:'relative'}},h('input',{value:this.state.poQ,onChange:e=>this.setState({poQ:e.target.value,poPage:0}),placeholder:'\u0e04\u0e49\u0e19\u0e40\u0e25\u0e02 PO / \u0e1c\u0e39\u0e49\u0e02\u0e32\u0e22',style:{width:R.isMobile?'100%':230,padding:'9px 11px 9px 30px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:12.5,outline:'none'}}),h('span',{style:{position:'absolute',left:10,top:9,color:this.MUTE}},'\u2315'))),
-        R.isMobile? this.poCards(rows) : this.poTable(rows))));
+          h('div',{style:{fontSize:15,fontWeight:700,marginRight:'auto'}},'\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e17\u0e35\u0e48\u0e02\u0e2d\u0e1c\u0e48\u0e32\u0e19\u0e23\u0e30\u0e1a\u0e1a (BR/PR)',h('span',{style:{fontSize:12,fontWeight:400,color:this.MUTE,marginLeft:8}},this.fmtN(sysRows.length)+' \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23')),
+          h('div',{style:{position:'relative'}},h('input',{value:this.state.poQ,onChange:e=>this.setState({poQ:e.target.value,poPage:0}),placeholder:'\u0e04\u0e49\u0e19\u0e40\u0e25\u0e02 PR / PO / \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23',style:{width:R.isMobile?'100%':230,padding:'9px 11px 9px 30px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:12.5,outline:'none'}}),h('span',{style:{position:'absolute',left:10,top:9,color:this.MUTE}},'\u2315'))),
+        this.brprPoTable(sysRows.slice(0,20)))));
+  }
+  // ตารางเอกสารที่ขอผ่านระบบ BR/PR — แสดงเฉพาะรายการที่ขอผ่านระบบ พร้อมเลข PO ที่ผูก
+  brprPoTable(view){ const h=React.createElement; const R=this.R;
+    if(!view.length) return this.emptyBox('ยังไม่มีใบขอซื้อที่ขอผ่านระบบ');
+    const cols=R.isMobile?'1fr 96px':'130px 1fr 150px 130px 120px';
+    const poStat=(p)=>{ if(p.paid>0||p.status==='จ่ายเงินแล้ว') return {l:'จ่ายเงินแล้ว',c:this.GREEN,bg:this.GREENBG}; if(p.gd>0||p.status==='รับของแล้ว') return {l:'รับของแล้ว',c:this.BLUE,bg:this.BLUEBG}; if(p.po) return {l:'ออก PO แล้ว',c:this.TEAL,bg:'#dcefea'}; return {l:'รอออก PO',c:this.AMBER,bg:this.AMBERBG}; };
+    return h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?520:780}},
+      h('div',{style:{display:'grid',gridTemplateColumns:cols,padding:'10px 18px',background:this.PANEL,fontSize:11,fontWeight:600,color:this.MUTE,textTransform:'uppercase'}},
+        h('div',null,'\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48 PR'),R.isMobile?null:h('div',null,'\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23 / \u0e2b\u0e19\u0e48\u0e27\u0e22\u0e07\u0e32\u0e19'),R.isMobile?null:h('div',null,'\u0e40\u0e25\u0e02 PO (SAP)'),h('div',{style:R.isMobile?{textAlign:'right'}:{}},'\u0e2a\u0e16\u0e32\u0e19\u0e30'),R.isMobile?null:h('div',{style:{textAlign:'right'}},'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32')),
+      view.map(p=>{ const st=poStat(p); return h('div',{key:p.id,onClick:()=>this.openRec(p),style:{cursor:'pointer',display:'grid',gridTemplateColumns:cols,padding:'11px 18px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center'},onMouseEnter:e=>e.currentTarget.style.background='#f8fafa',onMouseLeave:e=>e.currentTarget.style.background='#fff'},
+        h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},p.id),
+        R.isMobile?null:h('div',{style:{minWidth:0}},h('div',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},(p.items&&p.items[0]&&p.items[0].d)||'—'),h('div',{style:{fontSize:11,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},p.dn||'')),
+        R.isMobile?null:h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",color:p.po?this.INK:this.MUTE}},p.po||'—'),
+        h('div',{style:R.isMobile?{textAlign:'right'}:{}},this.pill(st.l,st.c,st.bg,true)),
+        R.isMobile?null:h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.baht(p.total))); })));
   }
 
   pgTracking(){
@@ -1998,9 +2015,8 @@ class Component extends DCLogic {
         const codes=Object.values(codeM).map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:Math.round(c.current),commit:Math.round(c.commit),actual:Math.round(c.actual),avail:Math.round(c.avail),dept:c.dept,deptCode:c.deptCode}));
         const tot=codes.reduce((a,c)=>({current:a.current+c.current,commit:a.commit+c.commit,actual:a.actual+c.actual,avail:a.avail+c.avail}),{current:0,commit:0,actual:0,avail:0});
         this.D.budgetSap={generated:this.D.meta.today,codes,totals:tot};
-        // also ingest embedded PO/GR detail sheets if present
-        if(sheets['BG_Detail_PO']) this.ingestPo(sheets['BG_Detail_PO'],num,dnum,TODAY);
-        if(sheets['BG_Detail_GR']) this.ingestGr(sheets['BG_Detail_GR'],num);
+        // หมายเหตุ: ชีท BG_Detail_PO/BG_Detail_GR มีโครงสร้างคอลัมน์ต่างจากรายงาน PO/GR หลัก
+        // จึงไม่ ingest อัตโนมัติ — ข้อมูล PO/GR ให้นำเข้าจากรายงาน PO/GR โดยตรงเท่านั้น
         this.persistBudgetSap(codes,tot);
         done('นำเข้ารายงานงบประมาณแล้ว — '+codes.length+' เลขงบ');
       } else if(kind==='po'){ const x=this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.po.length+' ใบ)'); }
