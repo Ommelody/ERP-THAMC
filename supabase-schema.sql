@@ -97,6 +97,38 @@ alter table public.item_code_requests add column if not exists budget_plan text 
 alter table public.item_code_requests add column if not exists value numeric default 0;
 alter table public.item_code_requests add column if not exists requested_at text;
 
+-- ---------- ฐานข้อมูลกลางรหัสพัสดุ (Item Master Pro V2 เขียนลง — ERP อ่านมาค้นหา) ----------
+-- โปรแกรม Item Master Pro V2 sync รายการรหัสพัสดุทั้งหมดมาที่ตารางนี้
+-- (ผ่าน Export/DTW หรือ API) ระบบ ERP จะ query แบบ live เพื่อค้นหารหัสตอนจัดสรรงบ
+create table if not exists public.item_master (
+  code       text primary key,      -- รหัสพัสดุ เช่น 8010130012
+  name       text,                  -- ชื่อรายการ
+  category   text,                  -- หมวด/กลุ่มพัสดุ
+  unit       text,                  -- หน่วยนับ
+  active     boolean default true,
+  updated_at timestamptz default now()
+);
+create index if not exists item_master_name_idx on public.item_master using gin (to_tsvector('simple', coalesce(name,'')));
+
+-- ตัวอย่างรหัสตั้งต้น (Item Pro V2 จะ sync ทับด้วยข้อมูลจริง)
+insert into public.item_master (code,name,category,unit) values
+  ('8010130012','เก้าอี้กลมหมุนปรับสูง-ต่ำได้ CH01','ครุภัณฑ์สำนักงาน - เก้าอี้','ตัว'),
+  ('8010830022','TP-04B โซฟาเป้าไข่','ครุภัณฑ์สำนักงาน','ตัว'),
+  ('8010840001','ถังดับเพลิง Cylinder Assembly','ครุภัณฑ์สำนักงาน - ถังดับเพลิง','ถัง'),
+  ('8010850006','ม่านมากับอาคาร','ครุภัณฑ์สำนักงาน - ผ้าม่าน','ชุด'),
+  ('8010670001','ป้ายอาคารกว้างหรือยาวเกิน 1.20 เมตร','ครุภัณฑ์สำนักงาน - ป้าย','ป้าย'),
+  ('8010470002','ตู้วางน้ำดื่มขนาด 1.50*1.10','ครุภัณฑ์สำนักงาน - เคาน์เตอร์','ตู้'),
+  ('8010470003','ชุดเคาน์เตอร์ลอย','ครุภัณฑ์สำนักงาน - เคาน์เตอร์','ชุด'),
+  ('8010540001','เครื่องนับเหรียญ','ครุภัณฑ์สำนักงาน - เครื่องนับเหรียญ','เครื่อง'),
+  ('8010550001','เครื่องนับธนบัตร','ครุภัณฑ์สำนักงาน - เครื่องนับธนบัตร','เครื่อง'),
+  ('8100305021','ชุดเครื่องมือผ่าตัดใหญ่','ครุภัณฑ์การแพทย์','ชุด'),
+  ('8100208033','ตู้แช่เวชภัณฑ์ควบคุมอุณหภูมิ','ครุภัณฑ์การแพทย์','ตู้'),
+  ('8100402011','เครื่องปั่นเหวี่ยงตกตะกอน','ครุภัณฑ์การแพทย์','เครื่อง'),
+  ('8100207120','รถเข็นทำแผลสแตนเลส','ครุภัณฑ์การแพทย์','คัน'),
+  ('8100110045','เตียงผู้ป่วยไฟฟ้า 3 ไก','ครุภัณฑ์การแพทย์','เตียง'),
+  ('8100305088','เครื่องวัดความดันโลหิตอัตโนมัติ','ครุภัณฑ์การแพทย์','เครื่อง')
+on conflict (code) do nothing;
+
 
 -- ============================================================
 -- RLS: เปิดใช้งาน แล้วอนุญาตให้ anon (public) อ่าน/เขียนได้
@@ -105,6 +137,7 @@ alter table public.item_code_requests add column if not exists requested_at text
 alter table public.budget_requests    enable row level security;
 alter table public.purchase_requests  enable row level security;
 alter table public.item_code_requests enable row level security;
+alter table public.item_master        enable row level security;
 
 drop policy if exists "anon all br" on public.budget_requests;
 create policy "anon all br" on public.budget_requests
@@ -116,6 +149,10 @@ create policy "anon all pr" on public.purchase_requests
 
 drop policy if exists "anon all icr" on public.item_code_requests;
 create policy "anon all icr" on public.item_code_requests
+  for all to anon using (true) with check (true);
+
+drop policy if exists "anon read im" on public.item_master;
+create policy "anon read im" on public.item_master
   for all to anon using (true) with check (true);
 
 -- ============================================================

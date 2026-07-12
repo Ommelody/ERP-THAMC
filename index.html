@@ -54,7 +54,8 @@ class Component extends DCLogic {
     approveModal:null, brOverrides:{}, prOverrides:{}, prPO:{}, newPrs:[],
     brCreatedFlash:false, prCreatedFlash:false,
     poBindModal:null, poBindInput:'', poDocs:[],
-    allocModal:null, itemProModal:null, itemProQ:'', itemProResult:null, allocCode:'',
+    allocModal:null, itemProModal:null, itemProQ:'', itemProResult:null, allocCode:'', ackModal:null,
+    itemMasterResults:null, itemMasterErr:false,
     docModal:null, docType:null,
     trackQ:'', trackResult:null, scanModal:false,
     exportModal:null,
@@ -268,6 +269,7 @@ class Component extends DCLogic {
   extraModals(){ const h=React.createElement;
     return h(React.Fragment,null,
       this.state.allocModal? this.allocSheet():null,
+      this.state.ackModal? this.ackSheet():null,
       this.state.itemProModal? this.itemProSheet():null,
       this.state.docModal? this.docModal2():null,
       this.state.scanModal? this.scanSheet():null,
@@ -512,7 +514,7 @@ class Component extends DCLogic {
       this.toastMsg('เชื่อมต่อฐานข้อมูล Supabase สำเร็จ — พร้อมคีย์ข้อมูลจริง');
       this.setState({br:(br||[]).map(x=>this.brFromDb(x)), pr:(pr||[]).map(x=>this.prFromDb(x)), loaded:true, online:true});
       this.loadUsers(sb);
-      this.syncItemPro(); this.startItemProPoll();
+      this.syncItemPro(); this.startItemProPoll(); this.searchItemMaster('');
     }catch(err){ console.warn('supabase load failed',err); this.toastMsg('ยังไม่ได้สร้างตารางใน Supabase — ใช้โหมดสาธิตชั่วคราว'); fallback(); }
   }
   // ดึงรหัสที่ Item Pro ออกให้แล้ว (status=issued) กลับเข้าระบบอัตโนมัติ — แก้ปัญหา "ส่งกลับมาแล้วเงียบ"
@@ -526,6 +528,17 @@ class Component extends DCLogic {
     }catch(e){ console.warn('syncItemPro',e); }
   }
   startItemProPoll(){ if(this._ipPoll) return; this._ipPoll=setInterval(()=>{ if(this.state.online) this.syncItemPro(true); }, 20000); }
+  // ค้นหารหัสพัสดุแบบ live จากฐานข้อมูลกลาง item_master (Item Master Pro V2 เขียนลง Supabase)
+  searchItemMaster(q){ clearTimeout(this._imT); const term=(q||'').trim();
+    this._imT=setTimeout(async ()=>{ const sb=this._sb;
+      if(!sb||!this.state.online){ this.setState({itemMasterResults:null,itemMasterErr:false}); return; }
+      try{ let query=sb.from('item_master').select('code,name,category,unit').limit(40);
+        if(term){ const esc=term.replace(/[%,]/g,' '); query=query.or('name.ilike.%'+esc+'%,code.ilike.%'+esc+'%,category.ilike.%'+esc+'%'); }
+        const r=await query;
+        if(r.error){ this.setState({itemMasterResults:null,itemMasterErr:true}); return; }
+        this.setState({itemMasterResults:r.data||[],itemMasterErr:false});
+      }catch(e){ this.setState({itemMasterResults:null,itemMasterErr:true}); }
+    },220); }
   async fetchAll(sb,table){ let out=[],from=0,step=1000;
     while(true){ const r=await sb.from(table).select('*').range(from,from+step-1); if(r.error){ return from===0?null:out; } const rows=r.data||[]; out=out.concat(rows); if(rows.length<step) break; from+=step; }
     return out; }
@@ -1173,8 +1186,9 @@ class Component extends DCLogic {
         h('div',{style:{flex:1,minWidth:180}},h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'\u0e07\u0e1a\u0e17\u0e35\u0e48\u0e08\u0e30\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23'),h('div',{style:{fontSize:13,fontWeight:600}},b.budgetName))),
       h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',justifyContent:'flex-end'}},
         h('button',{onClick:()=>this.openRec(b),style:{padding:'9px 15px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',color:this.INK}},'\u0e14\u0e39\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14'),
-        (needCode||sent)? h('button',{onClick:()=>this.setState({itemProModal:b.id,itemProQ:b.itemName,itemProResult:null}),style:{padding:'9px 16px',border:'none',background:this.AMBER,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e2a\u0e48\u0e07\u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a (Item Pro)'):null,
-        waitAck? h('button',{onClick:()=>this.brAllocate(b.id,b.code),style:{padding:'9px 18px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e23\u0e31\u0e1a\u0e17\u0e23\u0e32\u0e1a + \u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'):null,
+        (needCode||sent)? h('button',{onClick:()=>{this.searchItemMaster(b.itemName);this.setState({itemProModal:b.id,itemProQ:b.itemName,itemProResult:null,itemProManual:''});},style:{padding:'9px 16px',border:'none',background:this.AMBER,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e2a\u0e48\u0e07\u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a (Item Pro)'):null,
+        waitAck? h('button',{onClick:()=>{this.searchItemMaster(b.itemName);this.setState({itemProModal:b.id,itemProQ:b.itemName,itemProResult:null,itemProManual:''});},style:{padding:'9px 15px',border:'1px solid '+this.AMBER,background:'#fff',color:this.AMBER,borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e41\u0e01\u0e49\u0e44\u0e02\u0e23\u0e2b\u0e31\u0e2a'):null,
+        waitAck? h('button',{onClick:()=>this.setState({ackModal:b.id}),style:{padding:'9px 18px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e23\u0e31\u0e1a\u0e17\u0e23\u0e32\u0e1a + \u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'):null,
         (b.hasCode&&!waitAck)? h('button',{onClick:()=>this.setState({allocModal:b.id,allocCode:b.code}),style:{padding:'9px 18px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'):null)));
   }
 
@@ -1565,7 +1579,7 @@ class Component extends DCLogic {
     return this.modalShell(title,sub,body,footer);
   }
 
-  sheetWrap(body,w){ const h=React.createElement; const R=this.R; const close=()=>this.setState({approveModal:null,allocModal:null,itemProModal:null,scanModal:false,exportModal:false,docModal:null});
+  sheetWrap(body,w){ const h=React.createElement; const R=this.R; const close=()=>this.setState({approveModal:null,allocModal:null,itemProModal:null,ackModal:null,scanModal:false,exportModal:false,docModal:null});
     return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.5)',zIndex:86,display:'flex',alignItems:R.isMobile?'flex-end':'center',justifyContent:'center',padding:R.isMobile?0:20,animation:'overlayIn .15s'}},
       h('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:R.isMobile?'18px 18px 0 0':16,width:R.isMobile?'100%':(w||440),maxHeight:'92vh',overflowY:'auto',padding:'22px 22px 24px',boxShadow:'0 24px 60px rgba(10,25,22,.3)',animation:'sheetIn .22s'}}, body)); }
 
@@ -1582,6 +1596,21 @@ class Component extends DCLogic {
       h('div',{style:{display:'flex',gap:10}},
         h('button',{onClick:()=>this.setState({approveModal:null}),style:{flex:1,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer',fontWeight:500}},'\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01'),
         h('button',{onClick:()=>this.brApprove(b.id),style:{flex:2,padding:'12px',border:'none',background:this.BLUE,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34'))));
+  }
+
+  ackSheet(){
+    const h=React.createElement; const b=this.brById(this.state.ackModal); if(!b) return null;
+    return this.sheetWrap(h('div',null,
+      h('div',{style:{width:46,height:46,borderRadius:'50%',background:this.GREENBG,color:this.GREEN,display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,marginBottom:14}},'\u2713'),
+      h('div',{style:{fontSize:17,fontWeight:700,marginBottom:6}},'\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e23\u0e31\u0e1a\u0e17\u0e23\u0e32\u0e1a + \u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'),
+      h('div',{style:{fontSize:13,color:this.MUTE,marginBottom:16,lineHeight:1.55}},'\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e01\u0e32\u0e23\u0e23\u0e31\u0e1a\u0e17\u0e23\u0e32\u0e1a\u0e23\u0e2b\u0e31\u0e2a\u0e41\u0e25\u0e30\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a\u0e04\u0e33\u0e02\u0e2d ',h('b',{style:{color:this.INK,fontFamily:"'IBM Plex Mono',monospace"}},b.id),' \u2014 \u0e15\u0e23\u0e27\u0e08\u0e2a\u0e2d\u0e1a\u0e23\u0e2b\u0e31\u0e2a\u0e43\u0e2b\u0e49\u0e16\u0e39\u0e01\u0e15\u0e49\u0e2d\u0e07\u0e01\u0e48\u0e2d\u0e19 \u0e2b\u0e32\u0e01\u0e01\u0e14\u0e1c\u0e34\u0e14\u0e01\u0e14 "\u0e41\u0e01\u0e49\u0e44\u0e02\u0e23\u0e2b\u0e31\u0e2a" \u0e44\u0e14\u0e49'),
+      h('div',{style:{background:this.PANEL,borderRadius:11,padding:'14px 16px',marginBottom:18}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:6}},h('span',{style:{color:this.MUTE}},'\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23'),h('b',null,b.itemName)),
+        h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:6}},h('span',{style:{color:this.MUTE}},'\u0e23\u0e2b\u0e31\u0e2a\u0e1e\u0e31\u0e2a\u0e14\u0e38'),h('b',{style:{fontFamily:"'IBM Plex Mono',monospace",color:this.TEAL}},b.code||'\u2014')),
+        h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5}},h('span',{style:{color:this.MUTE}},'\u0e07\u0e1a\u0e17\u0e35\u0e48\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23'),h('b',null,b.budgetName))),
+      h('div',{style:{display:'flex',gap:10}},
+        h('button',{onClick:()=>{this.searchItemMaster(b.itemName);this.setState({ackModal:null,itemProModal:b.id,itemProQ:b.itemName,itemProManual:''});},style:{flex:1,padding:'12px',border:'1px solid '+this.AMBER,background:'#fff',borderRadius:10,fontSize:13,color:this.AMBER,cursor:'pointer',fontWeight:600}},'\u0e41\u0e01\u0e49\u0e44\u0e02\u0e23\u0e2b\u0e31\u0e2a'),
+        h('button',{onClick:()=>{this.setState({ackModal:null});this.brAllocate(b.id,b.code);},style:{flex:2,padding:'12px',border:'none',background:this.TEAL,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'))));
   }
 
   allocSheet(){
@@ -1603,18 +1632,22 @@ class Component extends DCLogic {
     const h=React.createElement; const b=this.brById(this.state.itemProModal); if(!b) return null;
     const q=this.state.itemProQ||''; const sent=b.status==='\u0e23\u0e2d\u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a\u0e1e\u0e31\u0e2a\u0e14\u0e38';
     const manual=this.state.itemProManual||'';
-    const catalog=(this.D.itemPro&&this.D.itemPro.length)? this.D.itemPro : this.sapCodes().map(c=>({code:c.exp,name:c.name}));
+    const live=this.state.itemMasterResults; const connected=Array.isArray(live);
     const qq=q.trim().toLowerCase();
-    const results=catalog.filter(it=>{ const nm=(it.name||'').toLowerCase(), cd=(it.code||'').toLowerCase(); return qq.length<1 || nm.indexOf(qq)>=0 || cd.indexOf(qq)>=0; }).slice(0,8);
+    let results, total;
+    if(connected){ results=live.slice(0,40); total=live.length; }
+    else { const catalog=(this.D.itemPro&&this.D.itemPro.length)? this.D.itemPro : this.sapCodes().map(c=>({code:c.exp,name:c.name}));
+      results=catalog.filter(it=>{ const nm=(it.name||'').toLowerCase(), cd=(it.code||'').toLowerCase(); return qq.length<1 || nm.indexOf(qq)>=0 || cd.indexOf(qq)>=0; }); total=results.length; results=results.slice(0,40); }
     return this.sheetWrap(h('div',null,
       h('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:6}},h('div',{style:{width:34,height:34,borderRadius:9,background:'#f0e6d0',color:this.AMBER,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:700}},'8'),h('div',{style:{fontSize:17,fontWeight:700}},'\u0e2a\u0e48\u0e07\u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a \u2014 Item Master Pro')),
       h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:14,lineHeight:1.5}},'\u0e04\u0e49\u0e19\u0e2b\u0e23\u0e37\u0e2d\u0e01\u0e23\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a\u0e08\u0e32\u0e01 Item Pro \u2014 \u0e40\u0e08\u0e49\u0e32\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23 \u0e2b\u0e23\u0e37\u0e2d\u0e01\u0e23\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a\u0e40\u0e2d\u0e07 \u0e2b\u0e23\u0e37\u0e2d\u0e41\u0e08\u0e49\u0e07\u0e02\u0e2d\u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a\u0e43\u0e2b\u0e21\u0e48'),
-      h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,marginBottom:5}},'\u0e04\u0e49\u0e19\u0e08\u0e32\u0e01\u0e10\u0e32\u0e19\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25 Item Pro'),
-      h('input',{value:q,onChange:e=>this.setState({itemProQ:e.target.value}),placeholder:'\u0e1e\u0e34\u0e21\u0e1e\u0e4c\u0e0a\u0e37\u0e48\u0e2d\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23 \u0e2b\u0e23\u0e37\u0e2d\u0e23\u0e2b\u0e31\u0e2a',style:{width:'100%',padding:'10px 12px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:13,outline:'none',marginBottom:10}}),
+      h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,marginBottom:5,display:'flex',justifyContent:'space-between',alignItems:'center'}},h('span',null,'\u0e04\u0e49\u0e19\u0e08\u0e32\u0e01\u0e10\u0e32\u0e19\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25 Item Pro'),
+        connected? h('span',{style:{fontSize:10.5,color:this.GREEN,fontWeight:600}},'\u25cf \u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e21\u0e10\u0e32\u0e19 item_master ('+total+')') : h('span',{style:{fontSize:10.5,color:this.AMBER,fontWeight:600}},'\u25cf \u0e41\u0e04\u0e15\u0e15\u0e32\u0e25\u0e47\u0e2d\u0e01\u0e2a\u0e33\u0e23\u0e2d\u0e07')),
+      h('input',{value:q,onChange:e=>{const v=e.target.value; this.setState({itemProQ:v}); this.searchItemMaster(v);},placeholder:'\u0e1e\u0e34\u0e21\u0e1e\u0e4c\u0e0a\u0e37\u0e48\u0e2d\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23 \u0e2b\u0e23\u0e37\u0e2d\u0e23\u0e2b\u0e31\u0e2a',style:{width:'100%',padding:'10px 12px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:13,outline:'none',marginBottom:10}}),
       h('div',{style:{maxHeight:210,overflowY:'auto',display:'flex',flexDirection:'column',gap:7,marginBottom:14}},
         results.length? results.map((it,i)=>h('div',{key:i,onClick:()=>this.brReceiveCode(b.id,it.code),style:{cursor:'pointer',display:'flex',alignItems:'center',gap:10,padding:'10px 12px',border:'1px solid '+this.LINE,borderRadius:9}},
           h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,color:this.TEAL,fontSize:12}},it.code),
-          h('span',{style:{flex:1,fontSize:12.5,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},it.name),
+          h('span',{style:{flex:1,minWidth:0}},h('span',{style:{fontSize:12.5,display:'block',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},it.name),it.category?h('span',{style:{fontSize:10.5,color:this.MUTE}},it.category):null),
           h('span',{style:{fontSize:11,color:this.AMBER,fontWeight:600}},'\u0e40\u0e25\u0e37\u0e2d\u0e01'))) : h('div',{style:{padding:'16px',textAlign:'center',fontSize:12.5,color:this.MUTE,background:this.PANEL,borderRadius:9}},'\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e23\u0e2b\u0e31\u0e2a\u0e17\u0e35\u0e48\u0e15\u0e23\u0e07 \u2014 \u0e25\u0e2d\u0e07\u0e04\u0e33\u0e2d\u0e37\u0e48\u0e19 \u0e2b\u0e23\u0e37\u0e2d\u0e01\u0e23\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a\u0e40\u0e2d\u0e07\u0e14\u0e49\u0e32\u0e19\u0e25\u0e48\u0e32\u0e07')),
       h('div',{style:{borderTop:'1px solid '+this.LINE,paddingTop:12,marginBottom:14}},
         h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,marginBottom:5}},'\u0e2b\u0e23\u0e37\u0e2d\u0e01\u0e23\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a\u0e40\u0e2d\u0e07 (\u0e40\u0e08\u0e49\u0e32\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13)'),
