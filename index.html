@@ -63,8 +63,9 @@ class Component extends DCLogic {
     icrRows:[], icrInput:{}, users:[], userForm:{username:'',password:'',name:'',role:'requester'}, brDraft:null, confirm:null,
     canInstall:false, notifBefore:{lo:7,hi:30}, uploads:{}
   };
-  SUPA_URL='https://hkqyeeonfyzlbnimztuz.supabase.co';
-  SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXllZW9uZnl6bGJuaW16dHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODU4NDMsImV4cCI6MjA5OTI2MTg0M30.Od-n8yNuIWu6Kx1Y_mW6Aemg3TRCxZG5ooTESpOgZBE';
+  SUPA_URL='https://hkqyeeonfyzlbnimztuz.supabase.co';  SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXllZW9uZnl6bGJuaW16dHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODU4NDMsImV4cCI6MjA5OTI2MTg0M30.Od-n8yNuIWu6Kx1Y_mW6Aemg3TRCxZG5ooTESpOgZBE';
+  ITEMPRO_API='';  // (ตัวเลือก) URL ปลายทาง REST ของโปรแกรม Item Master Pro เช่น https://itempro.example/api/code-request — เว้นว่างได้ ระบบจะใช้ตาราง item_code_requests บน Supabase เป็นช่องทาง
+  ITEMPRO_KEY='';  // (ตัวเลือก) API key/token สำหรับ Item Pro
 
   // ---------- palette ----------
   TEAL='#0d6e63'; TEALD='#0a5a51'; SIDE='#0f2e2a'; SIDE2='#17423b';
@@ -550,7 +551,26 @@ class Component extends DCLogic {
   brSendBack(id){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'ส่งกลับแก้ไข',log:(b.log||[]).concat([{s:'ผู้บริหารพิจารณา',by:this.role().user.name,at:this.now(),note:'ส่งกลับให้ผู้ขอแก้ไขรายละเอียด',revise:true}])})); this.setState({approveModal:null,sel:null}); this.toastMsg('ส่งกลับให้ผู้ขอแก้ไขแล้ว'); }
   brResubmit(id){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'รออนุมัติผู้บริหาร',log:(b.log||[]).concat([{s:'ผู้ขอแก้ไขและยื่นใหม่',by:this.role().user.name,at:this.now(),note:'ยื่นคำขอที่แก้ไขแล้วอีกครั้ง'}])})); this.setState({sel:null}); this.toastMsg('ยื่นคำขอที่แก้ไขใหม่แล้ว'); }
   brAllocate(id,code){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'จัดสรรงบแล้ว',code:code,hasCode:true,log:(b.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code}])})); this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg('จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); }
-  brRequestCode(id){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'รอออกรหัสพัสดุ',log:(b.log||[]).concat([{s:'ส่งออกรหัส (Item Pro)',by:this.role().user.name,at:this.now(),note:'ส่งคำขอออกรหัสใหม่ที่ Item Master Pro'}])})); const sb=this._sb; if(sb&&this.state.online){ sb.from('item_code_requests').insert({br_id:id,item_name:b.itemName,requested_by:this.role().user.name,status:'requested'}).then(r=>{if(r&&r.error)console.warn(r.error);}); } this.setState({itemProModal:null}); this.toastMsg('ส่งคำขอออกรหัสไปยัง Item Master Pro แล้ว'); }
+  brRequestCode(id){ const b=this.brById(id); if(!b)return;
+    const payload={ br_id:id, item_name:b.itemName, qty:b.qty, unit:b.unit, dept:b.dept, dept_name:b.dn,
+      budget_code:b.budgetCode||'', budget_plan:b.budgetPlan||'', value:b.value,
+      requested_by:this.role().user.name, requested_at:this.now(), status:'requested' };
+    this.persistBr(Object.assign({},b,{status:'รอออกรหัสพัสดุ',log:(b.log||[]).concat([{s:'ส่งออกรหัส (Item Pro)',by:this.role().user.name,at:this.now(),note:'ส่ง API ขอออกรหัสพัสดุใหม่ไปยัง Item Master Pro'}])}));
+    this.setState({itemProModal:null});
+    // 1) ส่ง API จริงไปปลายทาง Item Pro ถ้ากำหนด endpoint ไว้
+    if(this.ITEMPRO_API){
+      const hd={'Content-Type':'application/json'}; if(this.ITEMPRO_KEY) hd['Authorization']='Bearer '+this.ITEMPRO_KEY;
+      fetch(this.ITEMPRO_API,{method:'POST',headers:hd,body:JSON.stringify(payload)})
+        .then(r=>r.ok? r.json().catch(()=>({})) : Promise.reject('HTTP '+r.status))
+        .then(res=>{ this.toastMsg('ส่ง API ขอออกรหัสไป Item Pro สำเร็จ'+(res&&res.ref?' (Ref '+res.ref+')':'')); })
+        .catch(err=>{ this.toastMsg('ส่ง API ไม่สำเร็จ ('+err+') — บันทึกคำขอไว้ในคิว Item Pro แล้ว'); this._icrFallback(payload); });
+    } else {
+      // 2) ไม่มี endpoint → ใช้ตาราง item_code_requests บน Supabase เป็นช่องทาง API
+      this._icrFallback(payload);
+      this.toastMsg('ส่งคำขอออกรหัสเข้าคิว Item Master Pro แล้ว');
+    }
+  }
+  _icrFallback(payload){ const sb=this._sb; if(sb&&this.state.online){ sb.from('item_code_requests').insert(payload).then(r=>{ if(r&&r.error)console.warn(r.error); }); } }
   brReceiveCode(id,code){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'รอเจ้าหน้าที่งบประมาณรับทราบ',code:code,hasCode:true,log:(b.log||[]).concat([{s:'รับรหัสจาก Item Pro',by:'ระบบ Item Master Pro',at:this.now(),note:'ออกรหัส '+code+' เรียบร้อย'}])})); this.setState({itemProModal:null}); this.toastMsg('รับรหัส '+code+' จาก Item Pro แล้ว'); }
   // Copy to PR — สร้างใบขอซื้อจาก BR ที่จัดสรรงบแล้ว
   ymCode(){ const d=new Date(); return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0'); }

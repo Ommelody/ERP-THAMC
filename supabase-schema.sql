@@ -74,11 +74,29 @@ create table if not exists public.item_code_requests (
   id          bigint generated always as identity primary key,
   br_id       text,
   item_name   text,
+  qty         numeric default 0,
+  unit        text,
+  dept        text,
+  dept_name   text,
+  budget_code text default '',
+  budget_plan text default '',
+  value       numeric default 0,
   requested_by text,
+  requested_at text,
   code        text,
   status      text default 'requested',   -- requested | issued
   created_at  timestamptz default now()
 );
+-- สำหรับฐานข้อมูลเดิม: เพิ่มคอลัมน์รายละเอียดคำขอออกรหัส
+alter table public.item_code_requests add column if not exists qty numeric default 0;
+alter table public.item_code_requests add column if not exists unit text;
+alter table public.item_code_requests add column if not exists dept text;
+alter table public.item_code_requests add column if not exists dept_name text;
+alter table public.item_code_requests add column if not exists budget_code text default '';
+alter table public.item_code_requests add column if not exists budget_plan text default '';
+alter table public.item_code_requests add column if not exists value numeric default 0;
+alter table public.item_code_requests add column if not exists requested_at text;
+
 
 -- ============================================================
 -- RLS: เปิดใช้งาน แล้วอนุญาตให้ anon (public) อ่าน/เขียนได้
