@@ -29,6 +29,7 @@ create table if not exists public.budget_requests (
   status        text default 'รออนุมัติผู้บริหาร',
   budget_type   text,
   budget_name   text,
+  budget_code   text default '',
   pr_id         text default '',
   log           jsonb default '[]'::jsonb,
   created_at    timestamptz default now()
@@ -60,11 +61,15 @@ create table if not exists public.purchase_requests (
   status        text default 'ยื่นเสนอซื้อ',
   at            text,
   needed_date   text,
+  budget_code   text default '',
   log           jsonb default '[]'::jsonb,
   created_at    timestamptz default now()
 );
 
 -- ---------- (ตัวเลือก) ทะเบียนออกรหัสพัสดุจาก Item Master Pro ----------
+-- สำหรับฐานข้อมูลที่สร้างไว้ก่อนหน้า: เพิ่มคอลัมน์เลขที่งบประมาณ (Budget Reserve No)
+alter table public.budget_requests   add column if not exists budget_code text default '';
+alter table public.purchase_requests add column if not exists budget_code text default '';
 create table if not exists public.item_code_requests (
   id          bigint generated always as identity primary key,
   br_id       text,
