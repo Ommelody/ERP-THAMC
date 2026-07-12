@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
+<script src="./xlsx-lite.js"></script>
 </head>
 <body>
 <x-dc>
@@ -533,6 +534,8 @@ class Component extends DCLogic {
   poolFor(dept,cat){ return this.D.pools.find(p=>p.dept===dept&&p.cat===cat)||this.D.pools.find(p=>p.cat===cat); }
   // งบจริงจาก SAP อ้างอิงด้วยเลขที่งบประมาณ (Budget Reserve No)
   sapCodes(){ return (this.D.budgetSap&&this.D.budgetSap.codes)||[]; }
+  sapPlans(){ const seen={},out=[]; this.sapCodes().forEach(c=>{ if(c.plan&&!seen[c.plan]){seen[c.plan]=1;out.push(c.plan);} }); return out; }
+  sapCodesForPlan(plan){ return this.sapCodes().filter(c=>c.plan===plan); }
   sapBudget(code){ return this.sapCodes().find(c=>c.exp===code)||null; }
   // งบคงเหลือของเลขงบ = Available จาก SAP หัก BR/PR ในระบบที่ผูกเลขงบเดียวกันแต่ยังไม่ตัดใน SAP
   budgetRemain(code){ const c=this.sapBudget(code); if(!c) return null; let used=0;
@@ -571,7 +574,7 @@ class Component extends DCLogic {
     this.insertPr(pr); if(draft.brId){ const b=this.brById(draft.brId); if(b) this.persistBr(Object.assign({},b,{prId:id})); }
     this.setState({prDraft:null,page:'my-requests',sel:id,selType:'pr'}); this.toastMsg('สร้างใบขอซื้อ '+id+' และส่งงานพัสดุแล้ว'); }
   // ส่งคำขออนุมัติจัดสรรงบ (BR) จากฟอร์มที่คีย์เอง
-  newBrDraft(){ return {requester:this.role().user.name,dept:'13ORD',dn:this.D.deptNames['13ORD']||'กลุ่มการพยาบาล',tel:'',pos:this.role().user.sub,reason:'',cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',procType:'ซื้อ',neededDate:'',budgetType:'งบดำเนินการ',budgetName:'',budgetCode:(this.sapCodes()[0]&&this.sapCodes()[0].exp)||'',items:[{d:'',c:'',u:'',qty:1,price:0,total:0}],docs:[]}; }
+  newBrDraft(){ const p0=this.sapPlans()[0]||''; const c0=(this.sapCodesForPlan(p0)[0]||{}).exp||''; return {requester:this.role().user.name,dept:'13ORD',dn:this.D.deptNames['13ORD']||'กลุ่มการพยาบาล',tel:'',pos:this.role().user.sub,reason:'',cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',budgetPlan:p0,procType:'ซื้อ',neededDate:'',budgetType:'งบดำเนินการ',budgetName:'',budgetCode:c0,items:[{d:'',c:'',u:'',qty:1,price:0,total:0}],docs:[]}; }
   updBr(patch){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,patch)})); }
   updBrItem(i,patch){ this.setState(s=>{ const items=(s.brDraft.items||[]).slice(); items[i]=Object.assign({},items[i],patch); if('qty' in patch||'price' in patch) items[i].total=(+items[i].qty||0)*(+items[i].price||0); return {brDraft:Object.assign({},s.brDraft,{items})}; }); }
   addBrItem(){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,{items:(s.brDraft.items||[]).concat([{d:'',c:'',u:'',qty:1,price:0,total:0}])})})); }
@@ -582,8 +585,9 @@ class Component extends DCLogic {
     if(!d.reason){ this.toastMsg('กรุณากรอกเหตุผล/ความจำเป็น'); return; }
     if(!d.neededDate){ this.toastMsg('กรุณาระบุวันที่ต้องการใช้'); return; }
     const value=(d.items||[]).reduce((a,it)=>a+(it.total||0),0); const first=d.items.find(it=>it.d&&it.total>0)||d.items[0];
+    const bc=this.sapBudget(d.budgetCode); const catName=bc?(bc.name||d.cat):d.cat;
     const id='BR-'+this.ymCode()+'-'+String(1000+(this.state.br||[]).length+1).slice(1);
-    const nb={kind:'br',id,at:this.now(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:d.cat,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetName:d.budgetName||d.cat,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
+    const nb={kind:'br',id,at:this.now(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
     this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
   // พัสดุรับเรื่อง (เลือกเงื่อนไข)
   prReceive(id,cond){ const p=(this.state.pr||[]).find(x=>x.id===id); if(!p)return; this.persistPr(Object.assign({},p,{status:'พัสดุรับเรื่อง',condition:cond,log:(p.log||[]).concat([{s:'พัสดุรับเรื่อง',by:this.role().user.name,at:this.now(),note:cond}])})); this.toastMsg('รับเรื่องแล้ว · เงื่อนไข: '+cond); }
@@ -734,49 +738,51 @@ class Component extends DCLogic {
 
   // ================= DASHBOARD: BUDGET =================
   pgDashBudget(){
-    const h=React.createElement; const D=this.D; const R=this.R; const B=D.budgetFY;
-    const remain=B.alloc-B.committed; const pct=Math.round(B.committed/B.alloc*100);
-    // by expense category
-    const byCat={}; for(const p of D.pools){ const e=byCat[p.cat]||(byCat[p.cat]={k:p.cat,alloc:0,committed:0,invoiced:0,paid:0}); e.alloc+=p.alloc;e.committed+=p.committed;e.invoiced+=p.invoiced;e.paid+=p.paid; }
-    const cats=Object.values(byCat).sort((a,b)=>b.alloc-a.alloc);
-    // by dept
-    const byDept={}; for(const p of D.pools){ const e=byDept[p.dept]||(byDept[p.dept]={k:p.dept,alloc:0,committed:0}); e.alloc+=p.alloc;e.committed+=p.committed; }
-    const depts=Object.values(byDept).map(d=>Object.assign(d,{name:D.deptNames[d.k]||('หน่วยงาน '+d.k)})).sort((a,b)=>b.alloc-a.alloc).slice(0,10);
-    // near-limit pools
-    const near=D.pools.map(p=>Object.assign({},p,{pct:Math.round(p.committed/p.alloc*100),remain:p.alloc-p.committed})).sort((a,b)=>b.pct-a.pct).slice(0,6);
+    const h=React.createElement; const D=this.D; const R=this.R;
+    const bs=D.budgetSap||{codes:[],totals:{}}; const codes=bs.codes||[]; const T=bs.totals||{current:0,commit:0,actual:0,avail:0};
+    const used=(T.commit||0)+(T.actual||0); const pct=T.current? Math.round(used/T.current*100):0;
+    // group by Budget Plan (E)
+    const byPlan={}; codes.forEach(c=>{ const e=byPlan[c.plan]||(byPlan[c.plan]={k:c.plan,current:0,commit:0,actual:0,avail:0}); e.current+=c.current;e.commit+=c.commit;e.actual+=c.actual;e.avail+=c.avail; });
+    const plans=Object.values(byPlan).sort((a,b)=>b.current-a.current);
+    // near-limit budget codes
+    const near=codes.map(c=>({c,pct:c.current? Math.round(((c.commit+c.actual)/c.current)*100):0})).sort((a,b)=>b.pct-a.pct).slice(0,6);
     const kpis=[
-      {label:'งบจัดสรรรวม (ปี 2569)',val:'฿'+this.fmtM(B.alloc),unit:'ลบ.',accent:this.PUR},
-      {label:'ผูกพันแล้ว (PO)',val:'฿'+this.fmtM(B.committed),unit:'ลบ.',c:this.BLUE,accent:this.BLUE,sub:pct+'% ของงบจัดสรร'},
-      {label:'ตั้งหนี้แล้ว',val:'฿'+this.fmtM(B.invoiced),unit:'ลบ.',c:this.TEAL,accent:this.TEAL},
-      {label:'งบคงเหลือ',val:'฿'+this.fmtM(remain),unit:'ลบ.',c: remain<0?this.RED:this.GREEN,accent:this.GREEN,sub:(100-pct)+'% เหลือใช้'}
+      {label:'งบปัจจุบันรวม (SAP)',val:'฿'+this.fmtM(T.current),unit:'ลบ.',accent:this.PUR},
+      {label:'ผูกพัน (PO)',val:'฿'+this.fmtM(T.commit),unit:'ลบ.',c:this.BLUE,accent:this.BLUE},
+      {label:'ใช้จริง (Actual)',val:'฿'+this.fmtM(T.actual),unit:'ลบ.',c:this.TEAL,accent:this.TEAL,sub:pct+'% ของงบ'},
+      {label:'คงเหลือ (Available)',val:'฿'+this.fmtM(T.avail),unit:'ลบ.',c: T.avail<0?this.RED:this.GREEN,accent:this.GREEN}
     ];
     return h('div',null,
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,gap:10,flexWrap:'wrap'}},
+        h('div',{style:{fontSize:12,color:this.MUTE}},'ข้อมูลจากรายงานงบประมาณ SAP · '+codes.length+' เลขงบ · ณ '+(bs.generated||D.meta.today)),
+        h('button',{onClick:()=>this.go('data-sync'),style:{padding:'9px 16px',border:'1px solid '+this.PUR,background:this.PUR,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:7}},h('span',null,'⤒'),'อัปโหลด/ประมวลผลรายงานงบประมาณ')),
       this.kpiGrid(kpis,4),
       this.card(h('div',{style:{padding:R.isMobile?'16px':'20px 22px'}},
-        this.secTitle('การใช้งบตามหมวดรายจ่าย'),
-        h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
-          cats.map((c,i)=>{ const cp=Math.round(c.committed/c.alloc*100);
+        this.secTitle('การใช้งบตามแผนงาน (Budget Plan)'),
+        plans.length? h('div',{style:{display:'flex',flexDirection:'column',gap:16}},
+          plans.map((c,i)=>{ const u=c.commit+c.actual; const cp=c.current? Math.round(u/c.current*100):0;
             return h('div',{key:i},
               h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10,marginBottom:6,flexWrap:'wrap'}},
                 h('div',{style:{fontSize:13.5,fontWeight:600,color:this.INK}},c.k),
-                h('div',{style:{fontSize:12,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace"}},'฿'+this.fmtM(c.committed)+' / '+this.fmtM(c.alloc)+' ลบ. · ',h('b',{style:{color:cp>90?this.RED:this.INK}},cp+'%'))),
-              this.track2(c.committed,c.alloc,c.committed>c.alloc),
+                h('div',{style:{fontSize:12,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace"}},'฿'+this.fmtM(u)+' / '+this.fmtM(c.current)+' ลบ. · ',h('b',{style:{color:cp>90?this.RED:this.INK}},cp+'%'))),
+              this.track2(u,c.current,u>c.current),
               h('div',{style:{display:'flex',gap:16,marginTop:5,fontSize:10.5,color:this.MUTE}},
-                h('span',null,'ตั้งหนี้ ฿'+this.fmtM(c.invoiced)+' ลบ.'),
-                h('span',null,'จ่ายแล้ว ฿'+this.fmtM(c.paid)+' ลบ.'))); }))),{marginBottom:16}),
+                h('span',null,'ผูกพัน ฿'+this.fmtM(c.commit)+' ลบ.'),
+                h('span',null,'ใช้จริง ฿'+this.fmtM(c.actual)+' ลบ.'),
+                h('span',null,'คงเหลือ ฿'+this.fmtM(c.avail)+' ลบ.'))); })) : this.emptyBox('ยังไม่มีข้อมูลงบ — อัปโหลดรายงานงบประมาณ')),{marginBottom:16}),
       h('div',{style:{display:'grid',gridTemplateColumns:R.narrow?'1fr':'1fr 1fr',gap:16}},
-        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('งบผูกพันตามหน่วยงาน (สูงสุด 10)'),
-          this.hbars(depts.map(d=>({k:d.name,val:d.committed,c:this.PUR})),{money:true}))),
-        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('หมวดที่ใช้งบใกล้เต็ม — ต้องเฝ้าระวัง'),
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('งบตามแผนงาน (สูงสุด)'),
+          this.hbars(plans.slice(0,10).map(d=>({k:d.k,val:d.current,c:this.PUR})),{money:true}))),
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('เลขงบที่ใช้ใกล้เต็ม — ต้องเฝ้าระวัง'),
           h('div',{style:{display:'flex',flexDirection:'column',gap:12}},
             near.map((p,i)=> h('div',{key:i,style:{border:'1px solid '+this.LINE,borderRadius:11,padding:'11px 13px'}},
               h('div',{style:{display:'flex',justifyContent:'space-between',gap:8,marginBottom:7}},
                 h('div',{style:{minWidth:0}},
-                  h('div',{style:{fontSize:12.5,fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},(D.deptNames[p.dept]||p.dept)),
-                  h('div',{style:{fontSize:11,color:this.MUTE}},p.cat)),
+                  h('div',{style:{fontSize:12,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace",whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},p.c.exp),
+                  h('div',{style:{fontSize:11,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},p.c.name)),
                 h('div',{style:{fontSize:15,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",color:p.pct>95?this.RED:this.AMBER}},p.pct+'%')),
-              this.track2(p.committed,p.alloc,p.pct>100),
-              h('div',{style:{fontSize:10.5,color:this.MUTE,marginTop:5}},'คงเหลือ ฿'+this.fmtN(p.remain)))))) )));
+              this.track2(p.c.commit+p.c.actual,p.c.current,p.pct>100),
+              h('div',{style:{fontSize:10.5,color:this.MUTE,marginTop:5}},'คงเหลือ ฿'+this.fmtN(p.c.avail)))))) )));
   }
 
   // ================= DASHBOARD: PROCUREMENT =================
@@ -788,10 +794,15 @@ class Component extends DCLogic {
       {label:'ค้างรับของ',val:this.fmtN(S.track.await+S.track.partial),unit:'ใบ',c:this.AMBER,accent:this.AMBER},
       {label:'เกินกำหนดส่ง',val:this.fmtN(S.overdue),unit:'ใบ',c:this.RED,accent:this.RED,sub:'ต้องเร่งติดตาม'}
     ];
-    const pf=D.prefixes.map(p=>({k:this.prefixLabel(p.k),val:p.count,open:p.open,sub:'฿'+this.fmtM(p.val)+' ลบ.',c:this.BLUE}));
-    const ven=D.vendors.slice(0,8).map(v=>({k:v.name,val:v.val,c:this.TEAL}));
-    const chain=(D.po||[]).slice(0,8);
+    const po=D.po||[];
+    const pfM={}; po.forEach(r=>{ const k=r.pf||'อื่นๆ'; const e=pfM[k]||(pfM[k]={k,count:0,val:0}); e.count++; e.val+=(+r.val||0); });
+    const pf=Object.values(pfM).sort((a,b)=>b.count-a.count).map(p=>({k:this.prefixLabel(p.k),val:p.count,sub:'฿'+this.fmtM(p.val)+' ลบ.',c:this.BLUE}));
+    const venM={}; po.forEach(r=>{ const k=r.vn||'(ไม่ระบุ)'; venM[k]=(venM[k]||0)+(+r.val||0); });
+    const ven=Object.entries(venM).map(([k,v])=>({k,val:v,c:this.TEAL})).sort((a,b)=>b.val-a.val).slice(0,8);
+    const chain=po.slice(0,8);
     return h('div',null,
+      h('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:12}},
+        h('button',{onClick:()=>this.go('data-sync'),style:{padding:'9px 16px',border:'1px solid '+this.TEAL,background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:7}},h('span',null,'⤒'),'อัปโหลด/ประมวลผลข้อมูลจัดซื้อ (PO/GR/AP)')),
       this.kpiGrid(kpis,4),
       this.card(h('div',{style:{padding:'18px 20px'}},
         this.secTitle('คลิกดูความสัมพันธ์เอกสาร · PO → รับของ → ตั้งหนี้ → จ่ายเงิน'),
@@ -807,15 +818,20 @@ class Component extends DCLogic {
             h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:12.5,minWidth:80,textAlign:'right'}},this.baht(r.val))))
         ) : this.emptyBox('ยังไม่มีข้อมูล PO — อัปโหลดรายงาน PO จากเมนู "นำเข้าข้อมูล SAP"')),{marginBottom:16}),
       h('div',{style:{display:'grid',gridTemplateColumns:R.narrow?'1fr':'1fr 1fr',gap:16,marginBottom:16}},
-        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('PO ตามชุดเอกสาร (Prefix)'), this.hbars(pf,{color:this.BLUE}))),
-        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('ผู้ขายมูลค่าสูงสุด'), this.hbars(ven,{money:true,color:this.TEAL})))),
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('PO ตามชุดเอกสาร (Prefix)'), pf.length?this.hbars(pf,{color:this.BLUE}):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดรายงาน PO'))),
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('ผู้ขายมูลค่าสูงสุด'), ven.length?this.hbars(ven,{money:true,color:this.TEAL}):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดรายงาน PO')))),
       this.card(h('div',{style:{padding:'18px 20px'}},
         this.secTitle('แนวโน้มการออก PO เทียบการรับของ รายเดือน',
           h('div',{style:{display:'flex',gap:12,fontSize:11}},
             h('span',{style:{display:'flex',alignItems:'center',gap:5}},h('span',{style:{width:9,height:9,borderRadius:2,background:this.BLUE}}),'ออก PO'),
             h('span',{style:{display:'flex',alignItems:'center',gap:5}},h('span',{style:{width:9,height:9,borderRadius:2,background:this.TEAL}}),'ตั้งหนี้'))),
-        this.trendEl(D.monthly.slice(-16),[{key:'po',c:this.BLUE},{key:'ap',c:this.TEAL}],170)),{marginTop:0}));
+        (function(){ const mo=this.liveMonthly(); return mo.length? this.trendEl(mo,[{key:'po',c:this.BLUE},{key:'ap',c:this.TEAL}],170) : this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดรายงาน PO/ตั้งหนี้'); }).call(this)),{marginTop:0}));
   }
+  liveMonthly(){ const ym=s=>{ if(!s)return null; const p=String(s).split('.'); if(p.length!==3)return null; return '20'+p[2]+'-'+p[1]; };
+    const m={}; (this.D.po||[]).forEach(r=>{ const k=ym(r.post); if(!k)return; (m[k]=m[k]||{m:k,po:0,ap:0,pay:0}).po++; });
+    (this.D.ap||[]).forEach(r=>{ const k=ym(r.post); if(!k)return; (m[k]=m[k]||{m:k,po:0,ap:0,pay:0}).ap++; });
+    (this.D.pay||[]).forEach(r=>{ const k=ym(r.post); if(!k)return; (m[k]=m[k]||{m:k,po:0,ap:0,pay:0}).pay++; });
+    return Object.values(m).sort((a,b)=>a.m<b.m?-1:1).slice(-16); }
   prefixLabel(k){ const m={POH:'POH · เวชภัณฑ์ยา',POM:'POM · วัสดุการแพทย์',POS:'POS · สำนักงาน',POO:'POO · จ้าง/บริการ',POC:'POC · ครุภัณฑ์',POD:'POD · อื่นๆ'}; return m[k]||k; }
 
   // ================= DASHBOARD: PAYMENT =================
@@ -831,18 +847,20 @@ class Component extends DCLogic {
     const donut=h('div',{style:{display:'flex',alignItems:'center',gap:18,flexWrap:'wrap'}},
       this.donutEl([{v:S.apPaid,c:this.GREEN},{v:S.apUnpaid,c:this.RED}], Math.round(S.apPaid/tot*100)+'%','จ่ายแล้ว'),
       this.legend([{k:'จ่ายเงินแล้ว',c:this.GREEN,v:this.fmtN(S.apPaid)},{k:'ค้างจ่าย',c:this.RED,v:this.fmtN(S.apUnpaid)}]));
-    const methods=D.methods.map(m=>({k:m.k,val:m.val,c: m.k==='โอนเงิน'?this.TEAL: m.k==='เช็ค'?this.BLUE:this.AMBER,sub:this.fmtN(m.count)+' ครั้ง'}));
+    const mM={}; (D.pay||[]).forEach(p=>{ const k=p.method==='โอน'?'โอนเงิน':p.method||'อื่นๆ'; const e=mM[k]||(mM[k]={k,val:0,count:0}); e.val+=(+p.total||0); e.count++; });
+    const methods=Object.values(mM).map(m=>({k:m.k,val:m.val,c: m.k==='โอนเงิน'?this.TEAL: m.k==='เช็ค'?this.BLUE:this.AMBER,sub:this.fmtN(m.count)+' ครั้ง'}));
+    const mo=this.liveMonthly();
     return h('div',null,
       this.kpiGrid(kpis,4),
       h('div',{style:{display:'grid',gridTemplateColumns:R.narrow?'1fr':'340px 1fr',gap:16,marginBottom:16}},
-        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('สัดส่วนการจ่ายเงิน'), donut)),
-        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('ยอดจ่ายตามวิธีจ่าย'), this.hbars(methods,{money:true})))),
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('สัดส่วนการจ่ายเงิน'), tot>1?donut:this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดใบตั้งหนี้/การจ่าย'))),
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('ยอดจ่ายตามวิธีจ่าย'), methods.length?this.hbars(methods,{money:true}):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดการจ่ายเงิน')))),
       this.card(h('div',{style:{padding:'18px 20px'}},
         this.secTitle('แนวโน้มการจ่ายเงินรายเดือน',
           h('div',{style:{display:'flex',gap:12,fontSize:11}},
             h('span',{style:{display:'flex',alignItems:'center',gap:5}},h('span',{style:{width:9,height:9,borderRadius:2,background:this.TEAL}}),'ตั้งหนี้'),
             h('span',{style:{display:'flex',alignItems:'center',gap:5}},h('span',{style:{width:9,height:9,borderRadius:2,background:this.GREEN}}),'จ่ายเงิน'))),
-        this.trendEl(D.monthly.slice(-16),[{key:'ap',c:this.TEAL},{key:'pay',c:this.GREEN}],170))));
+        mo.length?this.trendEl(mo,[{key:'ap',c:this.TEAL},{key:'pay',c:this.GREEN}],170):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดใบตั้งหนี้/การจ่าย'))));
   }
 
   miniStat(label,val,c){ const h=React.createElement; return h('div',null,
@@ -921,8 +939,8 @@ class Component extends DCLogic {
           box(lab('หน่วยงาน',true),roo(d.dn+' ('+d.dept+')')),
           box(lab('เบอร์ติดต่อ'),inp(d.tel,v=>this.updBr({tel:v}),'02-xxx-xxxx')),
           box(lab('เหตุผล/ความจำเป็น',true),h('textarea',{value:d.reason||'',placeholder:'ชี้แจงเหตุผลความจำเป็น…',onChange:e=>this.updBr({reason:e.target.value}),style:{width:'100%',minHeight:58,fontSize:13.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',outline:'none',resize:'vertical',fontFamily:'inherit'}}),true),
-          box(lab('หมวดงบประมาณ',true),sel(d.cat,(this.D.exps||['ค่าวัสดุการแพทย์']),v=>this.updBr({cat:v}))),
-          box(lab('เลขที่งบประมาณ (Budget Reserve No)',true),h('select',{value:d.budgetCode||'',onChange:e=>this.updBr({budgetCode:e.target.value}),style:{width:'100%',fontSize:12.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',background:'#fff',cursor:'pointer',outline:'none',fontFamily:"'IBM Plex Mono',monospace"}},this.sapCodes().map(c=>h('option',{key:c.exp,value:c.exp},c.exp+' — '+(c.name||'').slice(0,26)))),true),
+          box(lab('หมวดงบประมาณ (Budget Plan)',true),h('select',{value:d.budgetPlan||'',onChange:e=>{const pl=e.target.value; const c0=(this.sapCodesForPlan(pl)[0]||{}).exp||''; this.updBr({budgetPlan:pl,budgetCode:c0});},style:{width:'100%',fontSize:12.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',background:'#fff',cursor:'pointer',outline:'none'}},this.sapPlans().map(p=>h('option',{key:p,value:p},p)))),
+          box(lab('เลขที่งบประมาณ (Budget Reserve No)',true),h('select',{value:d.budgetCode||'',onChange:e=>this.updBr({budgetCode:e.target.value}),style:{width:'100%',fontSize:12.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',background:'#fff',cursor:'pointer',outline:'none',fontFamily:"'IBM Plex Mono',monospace"}},this.sapCodesForPlan(d.budgetPlan).map(c=>h('option',{key:c.exp,value:c.exp},c.exp+' — '+(c.name||'')))),true),
           box(lab('ประเภท',true),sel(d.procType,['ซื้อ','จ้าง','เช่า'],v=>this.updBr({procType:v}))),
           box(lab('วันที่ต้องการใช้',true),h('input',{type:'date',value:this.thaiToIso(d.neededDate),onChange:e=>this.updBr({neededDate:this.isoToThai(e.target.value)}),style:{width:'100%',fontSize:13.5,border:'1px solid '+this.LINE,borderRadius:9,padding:'9px 12px',outline:'none',fontFamily:'inherit',color:this.INK}})))),
       sec('02','รายการที่ขออนุมัติ',
@@ -1682,8 +1700,49 @@ class Component extends DCLogic {
         h('div',{style:{fontSize:11.5,color:this.MUTE,marginTop:14,lineHeight:1.6}},'ℹ️ ในเวอร์ชันใช้งานจริง ระบบจะอ่านค่าจากไฟล์ที่อัปโหลดและปรับยอดคงเหลือของแต่ละเลขงบอัตโนมัติ — เดโมนี้แสดงยอดจากรายงานตัวอย่าง '+this.fmtN(bs.codes.length)+' เลขงบ')),{marginBottom:0}));
   }
   onSapUpload(kind,file){ if(!file) return; const nm=file.name.length>28?file.name.slice(0,28)+'…':file.name;
-    this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now()}})}));
-    this.toastMsg('นำเข้าไฟล์ '+kind.toUpperCase()+' แล้ว — ระบบกำลังเชื่อมโยงเลขที่งบประมาณ/PO'); }
+    this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'กำลังประมวลผล…'}})}));
+    const num=v=>{ if(v==null||v==='')return 0; const n=parseFloat(String(v).replace(/,/g,'')); return isNaN(n)?0:n; };
+    const dnum=s=>{ if(!s)return 0; const p=String(s).split('.'); if(p.length!==3)return 0; const d=+p[0],m=+p[1],y=+p[2]; return (2000+(y>100?y-543-2000+2000-2000:y))*10000+m*100+d; };
+    const TODAY=20260710;
+    const done=(msg,extra)=>{ this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'สำเร็จ'}})},extra||{})); this.toastMsg(msg); this.forceUpdate&&this.forceUpdate(); };
+    if(!window.readXlsxFile){ this.toastMsg('ตัวอ่านไฟล์ยังไม่พร้อม — ลองใหม่อีกครั้ง'); return; }
+    window.readXlsxFile(file).then(wbk=>{
+      const sheets=wbk.sheets, first=wbk.order[0], rows=sheets[first]||[];
+      if(kind==='budget'){
+        // Summary sheet: header row idx1; E(4)plan H(7)exp I(8)name G(6)level S(18)current Y(24)commit Z(25)actual AA(26)avail
+        const sh=sheets['Summary']||rows; const codeM={};
+        for(let i=2;i<sh.length;i++){ const r=sh[i]||[]; if(String(r[6]||'').trim()!=='5')continue; const exp=String(r[7]||'').trim(); if(!exp)continue;
+          const e=codeM[exp]||(codeM[exp]={exp,name:String(r[8]||'').trim(),plan:String(r[4]||'').trim(),sub:String(r[5]||'').trim(),current:0,commit:0,actual:0,avail:0,dept:String(r[11]||'').trim(),deptCode:String(r[10]||'').trim()});
+          e.current+=num(r[18]); e.commit+=num(r[24]); e.actual+=num(r[25]); e.avail+=num(r[26]); }
+        const codes=Object.values(codeM).map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:Math.round(c.current),commit:Math.round(c.commit),actual:Math.round(c.actual),avail:Math.round(c.avail),dept:c.dept,deptCode:c.deptCode}));
+        const tot=codes.reduce((a,c)=>({current:a.current+c.current,commit:a.commit+c.commit,actual:a.actual+c.actual,avail:a.avail+c.avail}),{current:0,commit:0,actual:0,avail:0});
+        this.D.budgetSap={generated:this.D.meta.today,codes,totals:tot};
+        // also ingest embedded PO/GR detail sheets if present
+        if(sheets['BG_Detail_PO']) this.ingestPo(sheets['BG_Detail_PO'],num,dnum,TODAY);
+        if(sheets['BG_Detail_GR']) this.ingestGr(sheets['BG_Detail_GR'],num);
+        done('นำเข้ารายงานงบประมาณแล้ว — '+codes.length+' เลขงบ');
+      } else if(kind==='po'){ const n=this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO แล้ว — '+n+' ใบ'); }
+      else if(kind==='gr'){ const n=this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+n+' ใบ'); }
+      else if(kind==='ap'){ const n=this.ingestAp(rows,num); done('นำเข้าใบตั้งหนี้แล้ว — '+n+' ใบ'); }
+      else if(kind==='pay'){ const n=this.ingestPay(rows,num); done('นำเข้าการจ่ายเงินแล้ว — '+n+' รายการ'); }
+      else done('นำเข้าไฟล์แล้ว');
+    }).catch(err=>{ this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'ผิดพลาด'}})})); this.toastMsg('อ่านไฟล์ไม่สำเร็จ: '+(err.message||err)); });
+  }
+  deptName(c){ return (this.D.deptNames&&this.D.deptNames[c])||('หน่วยงาน '+(c||'')); }
+  ingestPo(rows,num,dnum,TODAY){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
+      let o=m[doc]; if(!o){ o=m[doc]={doc,pf:r[2]||'',post:r[6]||'',deliv:r[8]||'',vc:r[9]||'',vn:r[10]||'',dept:r[30]||'',who:((r[36]||'')+' '+(r[37]||'')).trim(),exp:r[46]||'',val:0,qty:0,open:0,ln:0}; }
+      o.val+=num(r[26]); o.qty+=num(r[17]); o.open+=num(r[18]); o.ln++; }
+    const arr=Object.values(m).map(o=>{ o.tr=o.open<=0.01?'full':(o.open>=o.qty-0.01?'await':'partial'); o.dn=this.deptName(o.dept); o.val=Math.round(o.val); o.gd=0; o.ap=0; o.paid=0; o.grl=[];
+      const dd=dnum?dnum(o.deliv):0; o.od=(o.tr!=='full'&&dd&&dd<TODAY)?1:0; o.odDays=0; return o; });
+    this.D.po=arr; return arr.length; }
+  ingestGr(rows,num){ const byPo={}; let cnt=0; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue; cnt++; const base=r[34]||''; (byPo[base]=byPo[base]||[]).push({d:doc,date:r[6]||'',val:Math.round(num(r[26]))}); }
+    (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.length; p.grl=g.slice(0,6); } }); return cnt; }
+  ingestAp(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
+      let o=m[doc]; if(!o){ o=m[doc]={doc,post:r[5]||'',vc:r[8]||'',vn:r[9]||'',dept:r[31]||'',base:r[37]||'',exp:r[47]||'',val:0,paid:false,payDate:'',payDoc:'',method:''}; } o.val+=num(r[25]); }
+    const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); this.D.ap=arr; return arr.length; }
+  ingestPay(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[4]; if(!doc)continue;
+      let o=m[doc]; if(!o){ o=m[doc]={doc,series:r[3]||'',post:r[5]||'',due:r[6]||'',vc:r[10]||'',vn:r[11]||'',total:num(r[15]),method:num(r[23])>0?'โอน':num(r[29])>0?'เช็ค':'เงินสด',invCount:0,purpose:r[39]||''}; } o.invCount++; }
+    const arr=Object.values(m).map(o=>{ o.total=Math.round(o.total); return o; }); this.D.pay=arr; return arr.length; }
 
   pgSettings(){
     const h=React.createElement; const R=this.R; const users=this.state.users||[]; const fm=this.state.userForm||{};
