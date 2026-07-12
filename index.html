@@ -91,7 +91,7 @@ class Component extends DCLogic {
     if(d.po&&d.po.length) this.D.po=d.po; if(d.ap&&d.ap.length) this.D.ap=d.ap; if(d.pay&&d.pay.length) this.D.pay=d.pay;
     if(d.budgetSap&&d.budgetSap.codes&&d.budgetSap.codes.length) this.D.budgetSap=d.budgetSap;
     if(d.uploads) this._restoredUploads=d.uploads; }catch(e){} }
-  componentWillUnmount(){ if(this._onResize) window.removeEventListener('resize',this._onResize); if(this._ipPoll) clearInterval(this._ipPoll); }
+  componentWillUnmount(){ if(this._onResize) window.removeEventListener('resize',this._onResize); if(this._ipPoll) clearInterval(this._ipPoll); if(this._rtSub){ try{ this._rtSub.unsubscribe(); }catch(e){} } }
 
   // ---------- format ----------
   fmtN(n){ return Math.round(n||0).toLocaleString('en-US'); }
@@ -130,6 +130,7 @@ class Component extends DCLogic {
       {key:'overview',label:'ภาพรวมระบบ',icon:'◱',roles:['requester','budget','procurement','finance','exec']},
       {key:'dash-budget',label:'งบประมาณ',icon:'▦',roles:['budget','procurement','finance','exec']},
       {key:'dash-procure',label:'จัดซื้อทั้งกระบวนการ',icon:'⇄',roles:['budget','procurement','finance','exec']},
+      {key:'dash-cost',label:'วิเคราะห์ต้นทุน',icon:'◔',roles:['budget','procurement','finance','exec']},
       {key:'dash-payment',label:'การจ่ายเงิน',icon:'◉',roles:['budget','procurement','finance','exec']}
     ]},
     {zone:'ติดตาม & จัดการ',items:[
@@ -344,6 +345,7 @@ class Component extends DCLogic {
     'overview':{t:'ภาพรวมระบบจัดซื้อ–งบประมาณ–จ่ายเงิน',s:'สถานะรวมทุกขั้นตอน เชื่อมข้อมูลจริงจาก SAP'},
     'dash-budget':{t:'แดชบอร์ดงบประมาณ',s:'การใช้งบตามหน่วยงานและหมวดรายจ่าย · ปีงบ 2569'},
     'dash-procure':{t:'แดชบอร์ดการจัดซื้อ',s:'กระบวนการ PR → PO → รับของ ทั้งระบบ'},
+    'dash-cost':{t:'วิเคราะห์ต้นทุน (ค่าใช้จ่ายจริง)',s:'ค่าใช้จ่ายที่จ่ายจริงตามประเภทและหน่วยงาน · ปีงบ 2569'},
     'dash-payment':{t:'แดชบอร์ดการจ่ายเงิน',s:'สถานะตั้งหนี้และการจ่ายเงินให้ผู้ขาย'},
     'br-create':{t:'ขออนุมัติจัดสรรงบ (BR)',s:'ยื่นขออนุมัติจัดสรรงบประมาณเพื่อจัดหาพัสดุ'},
     'my-requests':{t:'คำขอของฉัน',s:'ติดตามสถานะ BR → PR ทุกขั้นตอนแบบเรียลไทม์'},
@@ -419,6 +421,7 @@ class Component extends DCLogic {
       case 'overview': return this.pgOverview();
       case 'dash-budget': return this.pgDashBudget();
       case 'dash-procure': return this.pgDashProcure();
+      case 'dash-cost': return this.pgDashCost();
       case 'dash-payment': return this.pgDashPayment();
       case 'br-create': return this.pgBrCreate();
       case 'my-requests': return this.pgMyRequests();
@@ -514,8 +517,16 @@ class Component extends DCLogic {
       this.toastMsg('เชื่อมต่อฐานข้อมูล Supabase สำเร็จ — พร้อมคีย์ข้อมูลจริง');
       this.setState({br:(br||[]).map(x=>this.brFromDb(x)), pr:(pr||[]).map(x=>this.prFromDb(x)), loaded:true, online:true});
       this.loadUsers(sb);
-      this.syncItemPro(); this.startItemProPoll(); this.searchItemMaster('');
+      this.syncItemPro(); this.startItemProPoll(); this.searchItemMaster(''); this.subscribeRealtime(sb);
     }catch(err){ console.warn('supabase load failed',err); this.toastMsg('ยังไม่ได้สร้างตารางใน Supabase — ใช้โหมดสาธิตชั่วคราว'); fallback(); }
+  }
+  // เชื่อม Supabase Realtime — Item Pro V2 เขียน item_master / ออกรหัสใน item_code_requests แล้วเข้าระบบทันที (ไม่ต้องรอ poll)
+  subscribeRealtime(sb){ if(this._rtSub||!sb||!sb.channel) return;
+    try{ this._rtSub=sb.channel('erp-itempro')
+      .on('postgres_changes',{event:'*',schema:'public',table:'item_code_requests'},()=>{ this.syncItemPro(true); })
+      .on('postgres_changes',{event:'*',schema:'public',table:'item_master'},()=>{ if(this.state.itemProModal) this.searchItemMaster(this.state.itemProQ||''); })
+      .subscribe();
+    }catch(e){ console.warn('realtime subscribe failed',e); }
   }
   // ดึงรหัสที่ Item Pro ออกให้แล้ว (status=issued) กลับเข้าระบบอัตโนมัติ — แก้ปัญหา "ส่งกลับมาแล้วเงียบ"
   async syncItemPro(silent){ const sb=this._sb; if(!sb||!this.state.online) return;
@@ -549,6 +560,10 @@ class Component extends DCLogic {
       if(po&&po.length){ this.D.po=po.map(r=>({doc:r.doc,pf:r.pf,post:r.post,deliv:r.deliv,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,who:r.who,val:+r.val,qty:+r.qty,open:+r.open,ln:+r.ln,tr:r.tr,gd:+r.gd,ap:+r.ap,paid:+r.paid,od:+r.od,odDays:+r.od_days,exp:r.exp,plan:r.plan,fy:r.fy,grl:r.grl||[]})); }
       if(ap&&ap.length){ this.D.ap=ap.map(r=>({doc:r.doc,post:r.post,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,val:+r.val,paid:r.paid,payDate:r.pay_date,payDoc:r.pay_doc,method:r.method,base:r.base,exp:r.exp,plan:r.plan})); }
       if(pay&&pay.length){ this.D.pay=pay.map(r=>({doc:r.doc,series:r.series,post:r.post,due:r.due,vn:r.vn,vc:r.vc,total:+r.total,method:r.method,invCount:+r.inv_count,purpose:r.purpose})); }
+      const bud=await this.fetchAll(sb,'sap_budget');
+      if(bud&&bud.length){ const codes=bud.map(r=>({exp:r.exp,name:r.name,plan:r.plan,sub:r.sub,current:+r.current,commit:+r.commit,actual:+r.actual,avail:+r.avail,dept:r.dept,deptCode:r.dept_code}));
+        const tot=codes.reduce((a,c)=>({current:a.current+c.current,commit:a.commit+c.commit,actual:a.actual+c.actual,avail:a.avail+c.avail}),{current:0,commit:0,actual:0,avail:0});
+        this.D.budgetSap={generated:this.D.meta.today,codes,totals:tot}; }
       this.setState({sapOnline:!!(po&&po.length)}); if(po&&po.length) this.toastMsg('โหลดข้อมูล SAP จากฐานข้อมูลแล้ว ('+po.length+' PO · '+((ap&&ap.length)||0)+' ตั้งหนี้ · '+((pay&&pay.length)||0)+' จ่าย)');
     }catch(e){ console.warn('sap load',e); }
   }
@@ -855,7 +870,39 @@ class Component extends DCLogic {
                   h('div',{style:{fontSize:11,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},p.c.name)),
                 h('div',{style:{fontSize:15,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",color:p.pct>95?this.RED:this.AMBER}},p.pct+'%')),
               this.track2(p.c.commit+p.c.actual,p.c.current,p.pct>100),
-              h('div',{style:{fontSize:10.5,color:this.MUTE,marginTop:5}},'คงเหลือ ฿'+this.fmtN(p.c.avail)))))) )));
+              h('div',{style:{fontSize:10.5,color:this.MUTE,marginTop:5}},'คงเหลือ ฿'+this.fmtN(p.c.avail)))))) )),
+      this.budgetCodeTable(codes,T));
+  }
+  // ตารางเลขงบเต็ม สำหรับผู้บริหาร — ค้นหา/กรองแผนงาน + drill รายละเอียด
+  budgetCodeTable(codes,T){ const h=React.createElement; const R=this.R;
+    const q=(this.state.bdQ||'').trim().toLowerCase(); const fPlan=this.state.bdPlan||'';
+    let rows=codes.filter(c=>{ if(fPlan && c.plan!==fPlan) return false;
+      if(q){ const hay=((c.exp||'')+' '+(c.name||'')+' '+(c.plan||'')+' '+(c.dept||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; } return true; });
+    rows=rows.map(c=>({c,used:(c.commit||0)+(c.actual||0),pct:c.current? Math.round(((c.commit+c.actual)/c.current)*100):0})).sort((a,b)=>b.c.current-a.c.current);
+    const plans=Array.from(new Set(codes.map(c=>c.plan).filter(Boolean)));
+    const sel=this.state.bdSel||''; 
+    const selStyle={border:'1px solid '+this.LINE,borderRadius:9,padding:'8px 10px',fontSize:12.5,background:'#fff',cursor:'pointer',outline:'none'};
+    const sumRows=rows.reduce((a,r)=>({cur:a.cur+r.c.current,use:a.use+r.used,av:a.av+r.c.avail}),{cur:0,use:0,av:0});
+    return this.card(h('div',{style:{padding:R.isMobile?'15px':'18px 20px'}},
+      this.secTitle('รายละเอียดเลขที่งบประมาณ — ค้นหา / กรอง / คลิกดูรายละเอียด', h('span',{style:{fontSize:12,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace"}},this.fmtN(rows.length)+' เลขงบ · คงเหลือ ฿'+this.fmtM(sumRows.av)+' ลบ.')),
+      h('div',{style:{display:'flex',gap:9,flexWrap:'wrap',marginBottom:14}},
+        h('input',{value:this.state.bdQ||'',onChange:e=>this.setState({bdQ:e.target.value}),placeholder:'ค้นเลขงบ / ชื่อ / หน่วยงาน',style:{flex:1,minWidth:170,border:'1px solid '+this.LINE,borderRadius:9,padding:'9px 12px',fontSize:12.5,outline:'none'}}),
+        h('select',{value:fPlan,onChange:e=>this.setState({bdPlan:e.target.value}),style:selStyle}, h('option',{value:''},'ทุกแผนงาน'), plans.map(p=>h('option',{key:p,value:p},p)))),
+      rows.length? h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?720:'auto'}},
+        h('div',{style:{display:'grid',gridTemplateColumns:'1fr 130px 130px 120px 90px',padding:'9px 12px',background:this.PANEL,fontSize:10.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',borderRadius:8}},
+          h('div',null,'เลขงบ / รายการ'),h('div',{style:{textAlign:'right'}},'งบปัจจุบัน'),h('div',{style:{textAlign:'right'}},'ใช้ไป'),h('div',{style:{textAlign:'right'}},'คงเหลือ'),h('div',{style:{textAlign:'center'}},'ใช้ %')),
+        rows.slice(0,40).map(r=>{ const open=sel===r.c.exp;
+          return h('div',{key:r.c.exp},
+            h('div',{onClick:()=>this.setState({bdSel:open?'':r.c.exp}),style:{cursor:'pointer',display:'grid',gridTemplateColumns:'1fr 130px 130px 120px 90px',padding:'10px 12px',borderBottom:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',background:open?'#f8f7fc':'#fff'}},
+              h('div',{style:{minWidth:0}},h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:11.5}},r.c.exp),h('div',{style:{fontSize:11,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.c.name)),
+              h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace"}},this.fmtN(r.c.current)),
+              h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",color:this.BLUE}},this.fmtN(r.used)),
+              h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,color:r.c.avail<0?this.RED:this.GREEN}},this.fmtN(r.c.avail)),
+              h('div',{style:{textAlign:'center',fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",color:r.pct>95?this.RED:r.pct>80?this.AMBER:this.INK}},r.pct+'%')),
+            open? h('div',{style:{padding:'12px 12px 14px 20px',background:'#f8f7fc',borderBottom:'1px solid #eee9f6'}},
+              h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr 1fr':'1fr 1fr 1fr 1fr',gap:12,fontSize:12}},
+                [['แผนงาน',r.c.plan],['หน่วยงาน',r.c.dept||'—'],['ผูกพัน (PO)','฿'+this.fmtN(r.c.commit)],['ใช้จริง','฿'+this.fmtN(r.c.actual)]].map((x,i)=>h('div',{key:i},h('div',{style:{fontSize:10.5,color:this.MUTE,marginBottom:2}},x[0]),h('div',{style:{fontWeight:600}},x[1]))))) :null); }))) 
+        : this.emptyBox(codes.length? 'ไม่พบเลขงบตามเงื่อนไข':'ยังไม่มีข้อมูลงบ — อัปโหลดรายงานงบประมาณ')),{marginBottom:0});
   }
 
   // ================= DASHBOARD: PROCUREMENT =================
@@ -890,6 +937,7 @@ class Component extends DCLogic {
               h('span',{style:{color:'#c0cdc9'}},'→'), this.pill(r.paid>0?'จ่ายแล้ว':'ค้างจ่าย',r.paid>0?this.GREEN:this.AMBER,r.paid>0?this.GREENBG:this.AMBERBG,true)),
             h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:12.5,minWidth:80,textAlign:'right'}},this.baht(r.val))))
         ) : this.emptyBox('ยังไม่มีข้อมูล PO — อัปโหลดรายงาน PO จากเมนู "นำเข้าข้อมูล SAP"')),{marginBottom:16}),
+      this.procureTable(po),
       h('div',{style:{display:'grid',gridTemplateColumns:R.narrow?'1fr':'1fr 1fr',gap:16,marginBottom:16}},
         this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('PO ตามชุดเอกสาร (Prefix)'), pf.length?this.hbars(pf,{color:this.BLUE}):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดรายงาน PO'))),
         this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('ผู้ขายมูลค่าสูงสุด'), ven.length?this.hbars(ven,{money:true,color:this.TEAL}):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดรายงาน PO')))),
@@ -906,6 +954,88 @@ class Component extends DCLogic {
     (this.D.pay||[]).forEach(r=>{ const k=ym(r.post); if(!k)return; (m[k]=m[k]||{m:k,po:0,ap:0,pay:0}).pay++; });
     return Object.values(m).sort((a,b)=>a.m<b.m?-1:1).slice(-16); }
   prefixLabel(k){ const m={POH:'POH · เวชภัณฑ์ยา',POM:'POM · วัสดุการแพทย์',POS:'POS · สำนักงาน',POO:'POO · จ้าง/บริการ',POC:'POC · ครุภัณฑ์',POD:'POD · อื่นๆ'}; return m[k]||k; }
+  poStatusOf(r){ return r.paid>0?{t:'จ่ายเงินแล้ว',c:this.GREEN,bg:this.GREENBG}:r.ap>0?{t:'ตั้งหนี้แล้ว',c:this.TEAL,bg:'#dcefea'}:r.gd>0?{t:'รับของแล้ว',c:this.BLUE,bg:this.BLUEBG}:{t:'รอรับของ',c:this.AMBER,bg:this.AMBERBG}; }
+  // ตารางติดตาม PO เต็มรูปแบบ — ค้นหา + กรองชุดเอกสาร/สถานะ/หน่วยงาน + คลิกดูความสัมพันธ์
+  procureTable(po){ const h=React.createElement; const R=this.R;
+    const q=(this.state.pdQ||'').trim().toLowerCase(); const fPf=this.state.pdPf||''; const fTr=this.state.pdTr||''; const fDept=this.state.pdDept||'';
+    let rows=po.filter(r=>{
+      if(fPf && (r.pf||'')!==fPf) return false;
+      if(fDept && (r.dept||'')!==fDept) return false;
+      if(fTr){ const st=this.poStatusOf(r).t; if(st!==fTr) return false; }
+      if(q){ const hay=((r.doc||'')+' '+(r.vn||'')+' '+(r.dn||'')+' '+(r.dept||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; }
+      return true; });
+    rows=rows.sort((a,b)=>(b.val||0)-(a.val||0));
+    const total=rows.reduce((s,r)=>s+(+r.val||0),0);
+    const pfs=Array.from(new Set(po.map(r=>r.pf).filter(Boolean)));
+    const depts=Array.from(new Set(po.map(r=>r.dept).filter(Boolean)));
+    const page=this.state.pdPage||0; const PER=12; const shown=rows.slice(0,(page+1)*PER);
+    const selStyle={border:'1px solid '+this.LINE,borderRadius:9,padding:'8px 10px',fontSize:12.5,background:'#fff',cursor:'pointer',outline:'none'};
+    return this.card(h('div',{style:{padding:R.isMobile?'15px':'18px 20px'}},
+      this.secTitle('รายการ PO ทั้งหมด — ค้นหา / กรอง / คลิกดูความสัมพันธ์', h('span',{style:{fontSize:12,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace"}},this.fmtN(rows.length)+' ใบ · ฿'+this.fmtM(total)+' ลบ.')),
+      h('div',{style:{display:'flex',gap:9,flexWrap:'wrap',marginBottom:14,alignItems:'center'}},
+        h('input',{value:this.state.pdQ||'',onChange:e=>this.setState({pdQ:e.target.value,pdPage:0}),placeholder:'ค้นเลขที่ PO / ผู้ขาย / หน่วยงาน',style:{flex:1,minWidth:170,border:'1px solid '+this.LINE,borderRadius:9,padding:'9px 12px',fontSize:12.5,outline:'none'}}),
+        h('select',{value:fPf,onChange:e=>this.setState({pdPf:e.target.value,pdPage:0}),style:selStyle}, h('option',{value:''},'ทุกชุดเอกสาร'), pfs.map(p=>h('option',{key:p,value:p},this.prefixLabel(p)))),
+        h('select',{value:fTr,onChange:e=>this.setState({pdTr:e.target.value,pdPage:0}),style:selStyle}, h('option',{value:''},'ทุกสถานะ'), ['รอรับของ','รับของแล้ว','ตั้งหนี้แล้ว','จ่ายเงินแล้ว'].map(s=>h('option',{key:s,value:s},s))),
+        h('select',{value:fDept,onChange:e=>this.setState({pdDept:e.target.value,pdPage:0}),style:selStyle}, h('option',{value:''},'ทุกหน่วยงาน'), depts.map(d=>h('option',{key:d,value:d},this.deptName(d))))),
+      shown.length? h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?720:'auto'}},
+        h('div',{style:{display:'grid',gridTemplateColumns:'110px 1fr 150px 130px 100px',padding:'9px 12px',background:this.PANEL,fontSize:10.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',borderRadius:8}},
+          h('div',null,'เลขที่ PO'),h('div',null,'ผู้ขาย / หน่วยงาน'),h('div',null,'สถานะ'),h('div',{style:{textAlign:'right'}},'มูลค่า'),h('div',{style:{textAlign:'center'}},'เอกสาร')),
+        shown.map(r=>{ const st=this.poStatusOf(r); return h('div',{key:r.doc,onClick:()=>this.setState({sel:r.doc,selType:'po'}),style:{cursor:'pointer',display:'grid',gridTemplateColumns:'110px 1fr 150px 130px 100px',padding:'10px 12px',borderBottom:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center'},onMouseEnter:e=>e.currentTarget.style.background='#f8fafa',onMouseLeave:e=>e.currentTarget.style.background='#fff'},
+          h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},r.doc),
+          h('div',{style:{minWidth:0}},h('div',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.vn||'—'),h('div',{style:{fontSize:11,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.dn||'')),
+          h('div',null,this.pill(st.t,st.c,st.bg,true)),
+          h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.baht(r.val)),
+          h('div',{style:{textAlign:'center',fontSize:10.5,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace"}},'GR'+(r.gd||0)+'·AP'+(r.ap||0))); }),
+        shown.length<rows.length? h('div',{style:{textAlign:'center',padding:'12px'}}, h('button',{onClick:()=>this.setState({pdPage:page+1}),style:{padding:'8px 20px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600,color:this.TEAL}},'ดูเพิ่ม ('+(rows.length-shown.length)+' รายการ)')):null))
+        : this.emptyBox(po.length? 'ไม่พบ PO ตามเงื่อนไขที่กรอง':'ยังไม่มีข้อมูล PO — อัปโหลดรายงาน PO')),{marginBottom:16});
+  }
+
+  // ================= DASHBOARD: COST ANALYSIS =================
+  pgDashCost(){
+    const h=React.createElement; const R=this.R; const D=this.D;
+    // ค่าใช้จ่ายจริง = ใบตั้งหนี้ (AP) ซึ่งเป็นภาระที่เกิดขึ้นจริง แยกตามหน่วยงาน + ประเภทค่าใช้จ่าย (exp)
+    const ap=D.ap||[]; const totAp=ap.reduce((s,r)=>s+(+r.val||0),0);
+    // จัดกลุ่มตามหน่วยงาน (dept) — ใช้ dept ของ PO/AP
+    const byDept={}; ap.forEach(r=>{ const k=r.dept||'(ไม่ระบุ)'; const e=byDept[k]||(byDept[k]={k,name:r.dn||this.deptName(k),val:0,cnt:0,exps:{}}); e.val+=(+r.val||0); e.cnt++;
+      const ex=r.exp||'อื่นๆ'; e.exps[ex]=(e.exps[ex]||0)+(+r.val||0); });
+    const depts=Object.values(byDept).sort((a,b)=>b.val-a.val);
+    // จัดกลุ่มตามประเภทค่าใช้จ่าย (exp)
+    const byExp={}; ap.forEach(r=>{ const k=r.exp||'อื่นๆ'; byExp[k]=(byExp[k]||0)+(+r.val||0); });
+    const exps=Object.entries(byExp).map(([k,v])=>({k:this.expLabel(k),val:v,c:this.PUR})).sort((a,b)=>b.val-a.val).slice(0,10);
+    const sel=this.state.costDept||''; const selDept=byDept[sel];
+    const kpis=[
+      {label:'ค่าใช้จ่ายจริงรวม (ตั้งหนี้)',val:'฿'+this.fmtM(totAp),unit:'ลบ.',accent:this.PUR,sub:this.fmtN(ap.length)+' ใบตั้งหนี้'},
+      {label:'จำนวนหน่วยงานที่มีค่าใช้จ่าย',val:this.fmtN(depts.length),unit:'หน่วย',c:this.BLUE,accent:this.BLUE},
+      {label:'ประเภทค่าใช้จ่าย',val:this.fmtN(Object.keys(byExp).length),unit:'ประเภท',c:this.TEAL,accent:this.TEAL},
+      {label:'หน่วยงานใช้สูงสุด',val:depts[0]?('฿'+this.fmtM(depts[0].val)):'—',unit:'ลบ.',c:this.AMBER,accent:this.AMBER,sub:depts[0]?(depts[0].name||'').slice(0,18):''}
+    ];
+    return h('div',null,
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12,gap:10,flexWrap:'wrap'}},
+        h('div',{style:{fontSize:12,color:this.MUTE}},'วิเคราะห์จากใบตั้งหนี้ (A/P Invoice) ที่นำเข้า · '+this.fmtN(ap.length)+' รายการ'),
+        h('button',{onClick:()=>this.go('data-sync'),style:{padding:'9px 16px',border:'1px solid '+this.PUR,background:this.PUR,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:7}},h('span',null,'⤒'),'อัปโหลด/ประมวลผลใบตั้งหนี้')),
+      this.kpiGrid(kpis,4),
+      h('div',{style:{display:'grid',gridTemplateColumns:R.narrow?'1fr':'1fr 1fr',gap:16,marginBottom:16}},
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('ค่าใช้จ่ายจริงตามประเภท (Expense)'), exps.length?this.hbars(exps,{money:true,color:this.PUR}):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดใบตั้งหนี้'))),
+        this.card(h('div',{style:{padding:'18px 20px'}}, this.secTitle('สัดส่วนตามหน่วยงาน (สูงสุด 8)'), depts.length?this.hbars(depts.slice(0,8).map(d=>({k:d.name,val:d.val,c:this.TEAL})),{money:true,color:this.TEAL}):this.emptyBox('ยังไม่มีข้อมูล — อัปโหลดใบตั้งหนี้')))),
+      this.card(h('div',{style:{padding:R.isMobile?'15px':'18px 20px'}},
+        this.secTitle('ค่าใช้จ่ายจริงเรียงตามหน่วยงาน — คลิกดูประเภทค่าใช้จ่าย'),
+        depts.length? h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?640:'auto'}},
+          h('div',{style:{display:'grid',gridTemplateColumns:'1fr 90px 160px 150px',padding:'9px 12px',background:this.PANEL,fontSize:10.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',borderRadius:8}},
+            h('div',null,'หน่วยงาน'),h('div',{style:{textAlign:'center'}},'ใบตั้งหนี้'),h('div',null,'สัดส่วน'),h('div',{style:{textAlign:'right'}},'ค่าใช้จ่ายจริง')),
+          depts.map(d=>{ const pct=totAp? Math.round(d.val/totAp*100):0; const open=sel===d.k;
+            return h('div',{key:d.k},
+              h('div',{onClick:()=>this.setState({costDept:open?'':d.k}),style:{cursor:'pointer',display:'grid',gridTemplateColumns:'1fr 90px 160px 150px',padding:'10px 12px',borderBottom:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',background:open?'#f8fafa':'#fff'}},
+                h('div',{style:{minWidth:0,display:'flex',alignItems:'center',gap:7}},h('span',{style:{color:this.MUTE,fontSize:10}},open?'▼':'▶'),h('span',{style:{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},d.name)),
+                h('div',{style:{textAlign:'center',fontFamily:"'IBM Plex Mono',monospace"}},d.cnt),
+                h('div',null,this.track2(d.val,depts[0].val,false),h('span',{style:{fontSize:10.5,color:this.MUTE}},pct+'%')),
+                h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:700}},this.baht(d.val))),
+              open? h('div',{style:{padding:'10px 12px 14px 30px',background:'#f8fafa',borderBottom:'1px solid #eef2f1'}},
+                h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:8,fontWeight:600}},'แยกตามประเภทค่าใช้จ่าย'),
+                Object.entries(d.exps).sort((a,b)=>b[1]-a[1]).map(([ex,v],i)=>h('div',{key:i,style:{display:'flex',justifyContent:'space-between',fontSize:12,padding:'4px 0',gap:10}},
+                  h('span',{style:{color:this.INK,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},this.expLabel(ex)),
+                  h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,color:this.PUR}},this.baht(v))))) :null); }))) : this.emptyBox('ยังไม่มีข้อมูลค่าใช้จ่าย — อัปโหลดใบตั้งหนี้ (A/P) จากเมนู "นำเข้าข้อมูล SAP"')),{marginBottom:0}));
+  }
+  expLabel(k){ if(!k)return 'อื่นๆ'; const c=this.sapBudget&&this.sapBudget(k); return c&&c.name? (k+' · '+c.name) : k; }
 
   // ================= DASHBOARD: PAYMENT =================
   pgDashPayment(){
@@ -1871,29 +2001,48 @@ class Component extends DCLogic {
         // also ingest embedded PO/GR detail sheets if present
         if(sheets['BG_Detail_PO']) this.ingestPo(sheets['BG_Detail_PO'],num,dnum,TODAY);
         if(sheets['BG_Detail_GR']) this.ingestGr(sheets['BG_Detail_GR'],num);
+        this.persistBudgetSap(codes,tot);
         done('นำเข้ารายงานงบประมาณแล้ว — '+codes.length+' เลขงบ');
-      } else if(kind==='po'){ const n=this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO แล้ว — '+n+' ใบ'); }
-      else if(kind==='gr'){ const n=this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+n+' ใบ'); }
-      else if(kind==='ap'){ const n=this.ingestAp(rows,num); done('นำเข้าใบตั้งหนี้แล้ว — '+n+' ใบ'); }
-      else if(kind==='pay'){ const n=this.ingestPay(rows,num); done('นำเข้าการจ่ายเงินแล้ว — '+n+' รายการ'); }
+      } else if(kind==='po'){ const x=this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.po.length+' ใบ)'); }
+      else if(kind==='gr'){ const x=this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+x.n+' รายการ (จับคู่เข้า PO)'); }
+      else if(kind==='ap'){ const x=this.ingestAp(rows,num); done('นำเข้าใบตั้งหนี้ — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.ap.length+' ใบ)'); }
+      else if(kind==='pay'){ const x=this.ingestPay(rows,num); done('นำเข้าการจ่ายเงิน — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.pay.length+' รายการ)'); }
       else done('นำเข้าไฟล์แล้ว');
     }).catch(err=>{ this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'ผิดพลาด'}})})); this.toastMsg('อ่านไฟล์ไม่สำเร็จ: '+(err.message||err)); });
   }
   deptName(c){ return (this.D.deptNames&&this.D.deptNames[c])||('หน่วยงาน '+(c||'')); }
+  async persistBudgetSap(codes,tot){ const sb=this._sb; if(!sb||!this.state.online||!codes||!codes.length) return;
+    try{ const payload=codes.map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:c.current,commit:c.commit,actual:c.actual,avail:c.avail,dept:c.dept,dept_code:c.deptCode}));
+      const CH=500; for(let i=0;i<payload.length;i+=CH){ const r=await sb.from('sap_budget').upsert(payload.slice(i,i+CH),{onConflict:'exp'}); if(r&&r.error){ console.warn('persistBudget',r.error); break; } }
+    }catch(e){ console.warn('persistBudgetSap',e); } }
   ingestPo(rows,num,dnum,TODAY){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,pf:r[2]||'',post:r[6]||'',deliv:r[8]||'',vc:r[9]||'',vn:r[10]||'',dept:r[30]||'',who:((r[36]||'')+' '+(r[37]||'')).trim(),exp:r[46]||'',val:0,qty:0,open:0,ln:0}; }
       o.val+=num(r[26]); o.qty+=num(r[17]); o.open+=num(r[18]); o.ln++; }
     const arr=Object.values(m).map(o=>{ o.tr=o.open<=0.01?'full':(o.open>=o.qty-0.01?'await':'partial'); o.dn=this.deptName(o.dept); o.val=Math.round(o.val); o.gd=0; o.ap=0; o.paid=0; o.grl=[];
       const dd=dnum?dnum(o.deliv):0; o.od=(o.tr!=='full'&&dd&&dd<TODAY)?1:0; o.odDays=0; return o; });
-    this.D.po=arr; return arr.length; }
+    const merged=this.mergeByKey(this.D.po,arr,'doc'); this.D.po=merged.list; this.persistSap('sap_po',arr); return {n:arr.length,added:merged.added,upd:merged.upd}; }
   ingestGr(rows,num){ const byPo={}; let cnt=0; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue; cnt++; const base=r[34]||''; (byPo[base]=byPo[base]||[]).push({d:doc,date:r[6]||'',val:Math.round(num(r[26]))}); }
-    (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.length; p.grl=g.slice(0,6); } }); return cnt; }
+    (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.length; p.grl=g.slice(0,6); } }); this.persistSap('sap_po',this.D.po); return {n:cnt,added:cnt,upd:0}; }
   ingestAp(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,post:r[5]||'',vc:r[8]||'',vn:r[9]||'',dept:r[31]||'',base:r[37]||'',exp:r[47]||'',val:0,paid:false,payDate:'',payDoc:'',method:''}; } o.val+=num(r[25]); }
-    const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); this.D.ap=arr; return arr.length; }
+    const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); const merged=this.mergeByKey(this.D.ap,arr,'doc'); this.D.ap=merged.list; this.linkApToPo(); this.persistSap('sap_ap',arr); return {n:arr.length,added:merged.added,upd:merged.upd}; }
   ingestPay(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[4]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,series:r[3]||'',post:r[5]||'',due:r[6]||'',vc:r[10]||'',vn:r[11]||'',total:num(r[15]),method:num(r[23])>0?'โอน':num(r[29])>0?'เช็ค':'เงินสด',invCount:0,purpose:r[39]||''}; } o.invCount++; }
-    const arr=Object.values(m).map(o=>{ o.total=Math.round(o.total); return o; }); this.D.pay=arr; return arr.length; }
+    const arr=Object.values(m).map(o=>{ o.total=Math.round(o.total); return o; }); const merged=this.mergeByKey(this.D.pay,arr,'doc'); this.D.pay=merged.list; this.linkPayToAp(); this.persistSap('sap_payment',arr); return {n:arr.length,added:merged.added,upd:merged.upd}; }
+  // ---------- upsert helpers: กันซ้ำ + อัปเดตต่อยอดไปข้างหน้า ----------
+  mergeByKey(existing,incoming,key){ const list=(existing||[]).slice(); const idx={}; list.forEach((o,i)=>{ idx[o[key]]=i; }); let added=0,upd=0;
+    incoming.forEach(o=>{ const k=o[key]; if(k in idx){ list[idx[k]]=Object.assign({},list[idx[k]],o); upd++; } else { idx[k]=list.length; list.push(o); added++; } });
+    return {list,added,upd}; }
+  linkApToPo(){ const poByBase={}; (this.D.po||[]).forEach(p=>{ poByBase[p.doc]=p; }); (this.D.ap||[]).forEach(a=>{ const p=poByBase[a.base]; if(p){ p.ap=(p.ap||0)+1; } }); }
+  linkPayToAp(){ /* ยอดจ่ายผูกด้วยเลขผู้ขาย/เอกสาร — คำนวณสรุปในแดชบอร์ด */ }
+  // ---------- persist SAP ลง Supabase แบบ upsert (กันซ้ำด้วย primary key doc) ----------
+  async persistSap(table,rows){ const sb=this._sb; if(!sb||!this.state.online||!rows||!rows.length) return;
+    try{ const map=r=>{ if(table==='sap_po') return {doc:r.doc,pf:r.pf,post:r.post,deliv:r.deliv,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,who:r.who,val:r.val,qty:r.qty,open:r.open,ln:r.ln,tr:r.tr,gd:r.gd||0,ap:r.ap||0,paid:r.paid||0,od:r.od||0,od_days:r.odDays||0,exp:r.exp,grl:r.grl||[]};
+        if(table==='sap_ap') return {doc:r.doc,post:r.post,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,val:r.val,paid:!!r.paid,pay_date:r.payDate||'',pay_doc:r.payDoc||'',method:r.method||'',base:r.base||'',exp:r.exp||''};
+        return {doc:r.doc,series:r.series,post:r.post,due:r.due,vn:r.vn,vc:r.vc,total:r.total,method:r.method,inv_count:r.invCount,purpose:r.purpose}; };
+      const payload=rows.map(map); const CH=500;
+      for(let i=0;i<payload.length;i+=CH){ const r=await sb.from(table).upsert(payload.slice(i,i+CH),{onConflict:'doc'}); if(r&&r.error){ console.warn('persistSap '+table,r.error); break; } }
+    }catch(e){ console.warn('persistSap',e); } }
 
   pgSettings(){
     const h=React.createElement; const R=this.R; const users=this.state.users||[]; const fm=this.state.userForm||{};

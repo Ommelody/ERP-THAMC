@@ -97,6 +97,42 @@ alter table public.item_code_requests add column if not exists budget_plan text 
 alter table public.item_code_requests add column if not exists value numeric default 0;
 alter table public.item_code_requests add column if not exists requested_at text;
 
+-- ---------- ตารางข้อมูล SAP (อัปโหลดจาก ERP แบบ upsert กันซ้ำ ต่อยอดไปข้างหน้า) ----------
+create table if not exists public.sap_po (
+  doc text primary key, pf text, post text, deliv text, vn text, vc text,
+  dept text, dn text, who text, val numeric default 0, qty numeric default 0,
+  open numeric default 0, ln int default 0, tr text, gd int default 0, ap int default 0,
+  paid numeric default 0, od int default 0, od_days int default 0, exp text, grl jsonb default '[]',
+  updated_at timestamptz default now()
+);
+create table if not exists public.sap_ap (
+  doc text primary key, post text, vn text, vc text, dept text, dn text,
+  val numeric default 0, paid boolean default false, pay_date text, pay_doc text,
+  method text, base text, exp text, updated_at timestamptz default now()
+);
+create table if not exists public.sap_payment (
+  doc text primary key, series text, post text, due text, vn text, vc text,
+  total numeric default 0, method text, inv_count int default 0, purpose text,
+  updated_at timestamptz default now()
+);
+create table if not exists public.sap_budget (
+  exp text primary key, name text, plan text, sub text,
+  current numeric default 0, commit numeric default 0, actual numeric default 0,
+  avail numeric default 0, dept text, dept_code text, updated_at timestamptz default now()
+);
+alter table public.sap_po      enable row level security;
+alter table public.sap_ap      enable row level security;
+alter table public.sap_payment enable row level security;
+alter table public.sap_budget  enable row level security;
+drop policy if exists "anon all sap_po" on public.sap_po;
+create policy "anon all sap_po" on public.sap_po for all to anon using (true) with check (true);
+drop policy if exists "anon all sap_ap" on public.sap_ap;
+create policy "anon all sap_ap" on public.sap_ap for all to anon using (true) with check (true);
+drop policy if exists "anon all sap_pay" on public.sap_payment;
+create policy "anon all sap_pay" on public.sap_payment for all to anon using (true) with check (true);
+drop policy if exists "anon all sap_bud" on public.sap_budget;
+create policy "anon all sap_bud" on public.sap_budget for all to anon using (true) with check (true);
+
 -- ---------- ฐานข้อมูลกลางรหัสพัสดุ (Item Master Pro V2 เขียนลง — ERP อ่านมาค้นหา) ----------
 -- โปรแกรม Item Master Pro V2 sync รายการรหัสพัสดุทั้งหมดมาที่ตารางนี้
 -- (ผ่าน Export/DTW หรือ API) ระบบ ERP จะ query แบบ live เพื่อค้นหารหัสตอนจัดสรรงบ
@@ -160,3 +196,9 @@ create policy "anon read im" on public.item_master
 -- ============================================================
 alter publication supabase_realtime add table public.budget_requests;
 alter publication supabase_realtime add table public.purchase_requests;
+alter publication supabase_realtime add table public.item_code_requests;
+alter publication supabase_realtime add table public.item_master;
+alter publication supabase_realtime add table public.sap_po;
+alter publication supabase_realtime add table public.sap_ap;
+alter publication supabase_realtime add table public.sap_payment;
+alter publication supabase_realtime add table public.sap_budget;
