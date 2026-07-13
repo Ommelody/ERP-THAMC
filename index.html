@@ -91,7 +91,7 @@ class Component extends DCLogic {
     if(d.po&&d.po.length) this.D.po=d.po; if(d.ap&&d.ap.length) this.D.ap=d.ap; if(d.pay&&d.pay.length) this.D.pay=d.pay;
     if(d.budgetSap&&d.budgetSap.codes&&d.budgetSap.codes.length) this.D.budgetSap=d.budgetSap;
     if(d.uploads) this._restoredUploads=d.uploads; }catch(e){} }
-  componentWillUnmount(){ if(this._onResize) window.removeEventListener('resize',this._onResize); if(this._ipPoll) clearInterval(this._ipPoll); if(this._rtSub){ try{ this._rtSub.unsubscribe(); }catch(e){} } }
+  componentWillUnmount(){ this.stopScan(); if(this._onResize) window.removeEventListener('resize',this._onResize); if(this._ipPoll) clearInterval(this._ipPoll); if(this._rtSub){ try{ this._rtSub.unsubscribe(); }catch(e){} } }
 
   // ---------- format ----------
   fmtN(n){ return Math.round(n||0).toLocaleString('en-US'); }
@@ -584,6 +584,45 @@ class Component extends DCLogic {
       return rec; }); }
   prById(id){ return this.prs().find(p=>p.id===id); }
   recById(id){ return String(id).indexOf('BR-')===0? this.brById(id) : this.prById(id); }
+
+  // ---------- QR camera scanner (jsQR) ----------
+  componentDidUpdate(prevProps,prevState){ if(prevState && prevState.scanModal && !this.state.scanModal) this.stopScan(); }
+  ensureJsQR(){ if(window.jsQR) return Promise.resolve(); if(this._jsqrP) return this._jsqrP;
+    this._jsqrP=new Promise((res,rej)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'; s.onload=()=>res(); s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); });
+    return this._jsqrP; }
+  async startScan(video){ if(!video || this._scanStream || this._scanStarting) return; this._scanStarting=true; this._scanVideo=video;
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+      this._scanStream=stream; video.srcObject=stream; video.setAttribute('playsinline','true'); video.muted=true;
+      await video.play().catch(()=>{});
+      await this.ensureJsQR();
+      this._scanCanvas=document.createElement('canvas');
+      this._scanStarting=false;
+      if(this.state.scanErr) this.setState({scanErr:false});
+      this._scanLoop();
+    }catch(e){ this._scanStarting=false; this.setState({scanErr:(e&&e.name==='NotAllowedError')?'denied':'nocam'}); }
+  }
+  _scanLoop(){ if(!this._scanStream) return; const v=this._scanVideo, c=this._scanCanvas;
+    if(v && v.readyState===4 && window.jsQR && c){ try{
+        c.width=v.videoWidth; c.height=v.videoHeight; const ctx=c.getContext('2d'); ctx.drawImage(v,0,0,c.width,c.height);
+        const img=ctx.getImageData(0,0,c.width,c.height); const code=window.jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+        if(code && code.data){ this.onScanResult(code.data); return; }
+      }catch(e){} }
+    this._scanRAF=requestAnimationFrame(()=>this._scanLoop());
+  }
+  stopScan(){ if(this._scanRAF){ cancelAnimationFrame(this._scanRAF); this._scanRAF=null; }
+    if(this._scanStream){ try{ this._scanStream.getTracks().forEach(t=>t.stop()); }catch(e){} this._scanStream=null; }
+    if(this._scanVideo){ try{ this._scanVideo.srcObject=null; }catch(e){} this._scanVideo=null; }
+    this._scanStarting=false; }
+  onScanResult(raw){ const text=String(raw||'').trim(); if(!text) return;
+    let id=text; const m=text.match(/(BR|PR)[-\s]?\d{6}[-\s]?\d+/i); if(m) id=m[0].replace(/\s/g,'').toUpperCase();
+    const all=this.brs().concat(this.prs());
+    let rec=this.recById(id) || all.find(r=>text.toUpperCase().indexOf(String(r.id).toUpperCase())>=0);
+    if(rec){ this.stopScan(); this.setState({scanModal:false,scanErr:false,trackResult:rec.id,trackQ:rec.id,page:'tracking',drawer:false}); this.toastMsg&&this.toastMsg('พบเอกสาร '+rec.id); }
+    else { const now=Date.now(); if(this._lastMiss&&now-this._lastMiss<1400 && this._lastMissText===text){ this._scanRAF=requestAnimationFrame(()=>this._scanLoop()); return; }
+      this._lastMiss=now; this._lastMissText=text; this.setState({scanErr:'notfound'});
+      this._scanRAF=requestAnimationFrame(()=>this._scanLoop()); }
+  }
   myRequests(){ const me=this.role().user.name; return { brs:this.brs().filter(b=>b.requester===me), prs:this.prs().filter(p=>p.requester===me) }; }
   brCount(st){ return this.brs().filter(b=>b.status===st).length; }
   prCount(st){ return this.prs().filter(p=>p.status===st).length; }
@@ -2020,7 +2059,8 @@ class Component extends DCLogic {
     const TODAY=20260710;
     const done=(msg,extra)=>{ this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'สำเร็จ'}})},extra||{})); this.saveSapLocal(); this.toastMsg(msg); this.forceUpdate&&this.forceUpdate(); };
     if(!window.readXlsxFile){ this.toastMsg('ตัวอ่านไฟล์ยังไม่พร้อม — ลองใหม่อีกครั้ง'); return; }
-    window.readXlsxFile(file).then(wbk=>{
+    const dbNote=(db)=> !db? '' : (db.offline? ' · ⚠ โหมดสาธิต: ยังไม่ขึ้นฐานข้อมูล' : db.ok? (' · ✓ บันทึกฐานข้อมูล '+db.count+' รายการ') : (' · ✗ ฐานข้อมูลล้มเหลว: '+(db.err||'').slice(0,80)));
+    window.readXlsxFile(file).then(async wbk=>{
       const sheets=wbk.sheets, first=wbk.order[0], rows=sheets[first]||[];
       if(kind==='budget'){
         // Summary sheet: header row idx1; E(4)plan H(7)exp I(8)name G(6)level S(18)current Y(24)commit Z(25)actual AA(26)avail
@@ -2033,34 +2073,35 @@ class Component extends DCLogic {
         this.D.budgetSap={generated:this.D.meta.today,codes,totals:tot};
         // หมายเหตุ: ชีท BG_Detail_PO/BG_Detail_GR มีโครงสร้างคอลัมน์ต่างจากรายงาน PO/GR หลัก
         // จึงไม่ ingest อัตโนมัติ — ข้อมูล PO/GR ให้นำเข้าจากรายงาน PO/GR โดยตรงเท่านั้น
-        this.persistBudgetSap(codes,tot);
-        done('นำเข้ารายงานงบประมาณแล้ว — '+codes.length+' เลขงบ');
-      } else if(kind==='po'){ const x=this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.po.length+' ใบ)'); }
-      else if(kind==='gr'){ const x=this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+x.n+' รายการ (จับคู่เข้า PO)'); }
-      else if(kind==='ap'){ const x=this.ingestAp(rows,num); done('นำเข้าใบตั้งหนี้ — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.ap.length+' ใบ)'); }
-      else if(kind==='pay'){ const x=this.ingestPay(rows,num); done('นำเข้าการจ่ายเงิน — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.pay.length+' รายการ)'); }
+        const db=await this.persistBudgetSap(codes,tot);
+        done('นำเข้ารายงานงบประมาณแล้ว — '+codes.length+' เลขงบ'+dbNote(db));
+      } else if(kind==='po'){ const x=await this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.po.length+' ใบ)'+dbNote(x.db)); }
+      else if(kind==='gr'){ const x=await this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+x.n+' รายการ (จับคู่เข้า PO)'+dbNote(x.db)); }
+      else if(kind==='ap'){ const x=await this.ingestAp(rows,num); done('นำเข้าใบตั้งหนี้ — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.ap.length+' ใบ)'+dbNote(x.db)); }
+      else if(kind==='pay'){ const x=await this.ingestPay(rows,num); done('นำเข้าการจ่ายเงิน — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.pay.length+' รายการ)'+dbNote(x.db)); }
       else done('นำเข้าไฟล์แล้ว');
     }).catch(err=>{ this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'ผิดพลาด'}})})); this.toastMsg('อ่านไฟล์ไม่สำเร็จ: '+(err.message||err)); });
   }
   deptName(c){ return (this.D.deptNames&&this.D.deptNames[c])||('หน่วยงาน '+(c||'')); }
-  async persistBudgetSap(codes,tot){ const sb=this._sb; if(!sb||!this.state.online||!codes||!codes.length) return;
+  async persistBudgetSap(codes,tot){ const sb=this._sb; if(!sb||!this.state.online) return {ok:false,offline:true,count:0}; if(!codes||!codes.length) return {ok:true,count:0};
     try{ const payload=codes.map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:c.current,commit:c.commit,actual:c.actual,avail:c.avail,dept:c.dept,dept_code:c.deptCode}));
-      const CH=500; for(let i=0;i<payload.length;i+=CH){ const r=await sb.from('sap_budget').upsert(payload.slice(i,i+CH),{onConflict:'exp'}); if(r&&r.error){ console.warn('persistBudget',r.error); break; } }
-    }catch(e){ console.warn('persistBudgetSap',e); } }
-  ingestPo(rows,num,dnum,TODAY){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
+      const CH=500; let done=0; for(let i=0;i<payload.length;i+=CH){ const chunk=payload.slice(i,i+CH); const r=await sb.from('sap_budget').upsert(chunk,{onConflict:'exp'}); if(r&&r.error){ console.warn('persistBudget',r.error); return {ok:false,count:done,err:(r.error.message||JSON.stringify(r.error))}; } done+=chunk.length; }
+      return {ok:true,count:done};
+    }catch(e){ console.warn('persistBudgetSap',e); return {ok:false,count:0,err:(e&&e.message)||String(e)}; } }
+  async ingestPo(rows,num,dnum,TODAY){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,pf:r[2]||'',post:r[6]||'',deliv:r[8]||'',vc:r[9]||'',vn:r[10]||'',dept:r[30]||'',who:((r[36]||'')+' '+(r[37]||'')).trim(),exp:r[46]||'',val:0,qty:0,open:0,ln:0}; }
       o.val+=num(r[26]); o.qty+=num(r[17]); o.open+=num(r[18]); o.ln++; }
     const arr=Object.values(m).map(o=>{ o.tr=o.open<=0.01?'full':(o.open>=o.qty-0.01?'await':'partial'); o.dn=this.deptName(o.dept); o.val=Math.round(o.val); o.gd=0; o.ap=0; o.paid=0; o.grl=[];
       const dd=dnum?dnum(o.deliv):0; o.od=(o.tr!=='full'&&dd&&dd<TODAY)?1:0; o.odDays=0; return o; });
-    const merged=this.mergeByKey(this.D.po,arr,'doc'); this.D.po=merged.list; this.persistSap('sap_po',arr); return {n:arr.length,added:merged.added,upd:merged.upd}; }
-  ingestGr(rows,num){ const byPo={}; let cnt=0; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue; cnt++; const base=r[34]||''; (byPo[base]=byPo[base]||[]).push({d:doc,date:r[6]||'',val:Math.round(num(r[26]))}); }
-    (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.length; p.grl=g.slice(0,6); } }); this.persistSap('sap_po',this.D.po); return {n:cnt,added:cnt,upd:0}; }
-  ingestAp(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
+    const merged=this.mergeByKey(this.D.po,arr,'doc'); this.D.po=merged.list; const db=await this.persistSap('sap_po',arr); return {n:arr.length,added:merged.added,upd:merged.upd,db}; }
+  async ingestGr(rows,num){ const byPo={}; let cnt=0; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue; cnt++; const base=r[34]||''; (byPo[base]=byPo[base]||[]).push({d:doc,date:r[6]||'',val:Math.round(num(r[26]))}); }
+    (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.length; p.grl=g.slice(0,6); } }); const db=await this.persistSap('sap_po',this.D.po); return {n:cnt,added:cnt,upd:0,db}; }
+  async ingestAp(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,post:r[5]||'',vc:r[8]||'',vn:r[9]||'',dept:r[31]||'',base:r[37]||'',exp:r[47]||'',val:0,paid:false,payDate:'',payDoc:'',method:''}; } o.val+=num(r[25]); }
-    const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); const merged=this.mergeByKey(this.D.ap,arr,'doc'); this.D.ap=merged.list; this.linkApToPo(); this.persistSap('sap_ap',arr); return {n:arr.length,added:merged.added,upd:merged.upd}; }
-  ingestPay(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[4]; if(!doc)continue;
+    const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); const merged=this.mergeByKey(this.D.ap,arr,'doc'); this.D.ap=merged.list; this.linkApToPo(); const db=await this.persistSap('sap_ap',arr); return {n:arr.length,added:merged.added,upd:merged.upd,db}; }
+  async ingestPay(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[4]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,series:r[3]||'',post:r[5]||'',due:r[6]||'',vc:r[10]||'',vn:r[11]||'',total:num(r[15]),method:num(r[23])>0?'โอน':num(r[29])>0?'เช็ค':'เงินสด',invCount:0,purpose:r[39]||''}; } o.invCount++; }
-    const arr=Object.values(m).map(o=>{ o.total=Math.round(o.total); return o; }); const merged=this.mergeByKey(this.D.pay,arr,'doc'); this.D.pay=merged.list; this.linkPayToAp(); this.persistSap('sap_payment',arr); return {n:arr.length,added:merged.added,upd:merged.upd}; }
+    const arr=Object.values(m).map(o=>{ o.total=Math.round(o.total); return o; }); const merged=this.mergeByKey(this.D.pay,arr,'doc'); this.D.pay=merged.list; this.linkPayToAp(); const db=await this.persistSap('sap_payment',arr); return {n:arr.length,added:merged.added,upd:merged.upd,db}; }
   // ---------- upsert helpers: กันซ้ำ + อัปเดตต่อยอดไปข้างหน้า ----------
   mergeByKey(existing,incoming,key){ const list=(existing||[]).slice(); const idx={}; list.forEach((o,i)=>{ idx[o[key]]=i; }); let added=0,upd=0;
     incoming.forEach(o=>{ const k=o[key]; if(k in idx){ list[idx[k]]=Object.assign({},list[idx[k]],o); upd++; } else { idx[k]=list.length; list.push(o); added++; } });
@@ -2068,13 +2109,14 @@ class Component extends DCLogic {
   linkApToPo(){ const poByBase={}; (this.D.po||[]).forEach(p=>{ poByBase[p.doc]=p; }); (this.D.ap||[]).forEach(a=>{ const p=poByBase[a.base]; if(p){ p.ap=(p.ap||0)+1; } }); }
   linkPayToAp(){ /* ยอดจ่ายผูกด้วยเลขผู้ขาย/เอกสาร — คำนวณสรุปในแดชบอร์ด */ }
   // ---------- persist SAP ลง Supabase แบบ upsert (กันซ้ำด้วย primary key doc) ----------
-  async persistSap(table,rows){ const sb=this._sb; if(!sb||!this.state.online||!rows||!rows.length) return;
+  async persistSap(table,rows){ const sb=this._sb; if(!sb||!this.state.online) return {ok:false,offline:true,count:0}; if(!rows||!rows.length) return {ok:true,count:0};
     try{ const map=r=>{ if(table==='sap_po') return {doc:r.doc,pf:r.pf,post:r.post,deliv:r.deliv,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,who:r.who,val:r.val,qty:r.qty,open:r.open,ln:r.ln,tr:r.tr,gd:r.gd||0,ap:r.ap||0,paid:r.paid||0,od:r.od||0,od_days:r.odDays||0,exp:r.exp,grl:r.grl||[]};
         if(table==='sap_ap') return {doc:r.doc,post:r.post,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,val:r.val,paid:!!r.paid,pay_date:r.payDate||'',pay_doc:r.payDoc||'',method:r.method||'',base:r.base||'',exp:r.exp||''};
         return {doc:r.doc,series:r.series,post:r.post,due:r.due,vn:r.vn,vc:r.vc,total:r.total,method:r.method,inv_count:r.invCount,purpose:r.purpose}; };
-      const payload=rows.map(map); const CH=500;
-      for(let i=0;i<payload.length;i+=CH){ const r=await sb.from(table).upsert(payload.slice(i,i+CH),{onConflict:'doc'}); if(r&&r.error){ console.warn('persistSap '+table,r.error); break; } }
-    }catch(e){ console.warn('persistSap',e); } }
+      const payload=rows.map(map); const CH=500; let done=0;
+      for(let i=0;i<payload.length;i+=CH){ const chunk=payload.slice(i,i+CH); const r=await sb.from(table).upsert(chunk,{onConflict:'doc'}); if(r&&r.error){ console.warn('persistSap '+table,r.error); return {ok:false,count:done,err:(r.error.message||JSON.stringify(r.error))}; } done+=chunk.length; }
+      return {ok:true,count:done};
+    }catch(e){ console.warn('persistSap',e); return {ok:false,count:0,err:(e&&e.message)||String(e)}; } }
 
   pgSettings(){
     const h=React.createElement; const R=this.R; const users=this.state.users||[]; const fm=this.state.userForm||{};
@@ -2228,22 +2270,32 @@ class Component extends DCLogic {
   }
 
   scanSheet(){
-    const h=React.createElement; const R=this.R; const close=()=>this.setState({scanModal:false});
+    const h=React.createElement; const R=this.R; const close=()=>{ this.stopScan(); this.setState({scanModal:false,scanErr:false}); };
     const sample=this.brs().concat(this.prs());
+    const err=this.state.scanErr;
+    const camBox = (err==='denied'||err==='nocam')
+      ? h('div',{style:{width:'100%',aspectRatio:'1',maxWidth:280,margin:'0 auto 14px',background:'#0f2e2a',borderRadius:14,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,padding:20,textAlign:'center'}},
+          h('div',{style:{fontSize:30}},'📷'),
+          h('div',{style:{color:'#cfe6e0',fontSize:13,lineHeight:1.6}}, err==='denied'?'ไม่ได้รับอนุญาตให้ใช้กล้อง — โปรดอนุญาตในเบราว์เซอร์แล้วลองใหม่':'ไม่พบกล้องบนอุปกรณ์นี้ — ใช้การค้นหาด้วยเลขเอกสารแทน'),
+          err==='denied'? h('button',{onClick:()=>{ this.setState({scanErr:false}); },style:{padding:'9px 16px',border:'1px solid '+this.TEAL,background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'ลองเปิดกล้องอีกครั้ง'):null)
+      : h('div',{style:{position:'relative',width:'100%',aspectRatio:'1',maxWidth:280,margin:'0 auto 14px',background:'#0f2e2a',borderRadius:14,overflow:'hidden'}},
+          h('video',{ref:v=>{ if(v) this.startScan(v); },autoPlay:true,muted:true,playsInline:true,style:{width:'100%',height:'100%',objectFit:'cover',display:'block'}}),
+          h('div',{style:{position:'absolute',inset:'16%',border:'2px solid rgba(255,255,255,.8)',borderRadius:12,boxShadow:'0 0 0 9999px rgba(6,20,17,.28)'}}),
+          h('div',{style:{position:'absolute',left:'16%',right:'16%',height:2,background:this.TEAL,top:'50%',boxShadow:'0 0 14px '+this.TEAL,animation:'scanline 2s ease-in-out infinite'}}),
+          h('div',{style:{position:'absolute',left:0,right:0,bottom:10,textAlign:'center',color:'#bfe6dd',fontSize:11.5}}, this._scanStream?'กำลังค้นหา QR…':'กำลังเปิดกล้อง…'));
     return this.sheetWrap(h('div',null,
-      h('div',{style:{fontSize:17,fontWeight:700,marginBottom:4}},'\u0e2a\u0e41\u0e01\u0e19 QR \u0e15\u0e34\u0e14\u0e15\u0e32\u0e21\u0e2a\u0e16\u0e32\u0e19\u0e30'),
-      h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:16}},'\u0e2b\u0e31\u0e19\u0e01\u0e25\u0e49\u0e2d\u0e07\u0e44\u0e1b\u0e17\u0e35\u0e48 QR \u0e1a\u0e19\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23 \u2014 \u0e2b\u0e23\u0e37\u0e2d\u0e41\u0e15\u0e30\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e2a\u0e32\u0e18\u0e34\u0e15'),
-      h('div',{style:{position:'relative',width:'100%',aspectRatio:'1',maxWidth:280,margin:'0 auto 16px',background:'#0f2e2a',borderRadius:14,overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center'}},
-        h('div',{style:{position:'absolute',inset:'18%',border:'2px solid rgba(255,255,255,.6)',borderRadius:12}}),
-        h('div',{style:{position:'absolute',left:'18%',right:'18%',height:2,background:this.TEAL,top:'50%',boxShadow:'0 0 12px '+this.TEAL}}),
-        h('div',{style:{color:'#7fc9bb',fontSize:12}},'\u25a6 \u0e01\u0e33\u0e25\u0e31\u0e07\u0e04\u0e49\u0e19\u0e2b\u0e32 QR\u2026')),
-      h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:8}},'\u0e2b\u0e23\u0e37\u0e2d\u0e41\u0e15\u0e30\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e15\u0e31\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07 (\u0e08\u0e33\u0e25\u0e2d\u0e07):'),
+      h('style',null,'@keyframes scanline{0%,100%{top:20%}50%{top:80%}}'),
+      h('div',{style:{fontSize:17,fontWeight:700,marginBottom:4}},'สแกน QR ติดตามสถานะ'),
+      h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:16}},'หันกล้องไปที่ QR บนเอกสาร BR/PR — พบแล้วระบบจะปิดกล้องและแสดงสถานะให้อัตโนมัติ'),
+      camBox,
+      err==='notfound'? h('div',{style:{background:this.AMBERBG,color:'#8a6208',fontSize:12,padding:'8px 12px',borderRadius:9,marginBottom:12,textAlign:'center'}},'อ่าน QR ได้แต่ไม่พบเอกสารในระบบ — ลองใหม่หรือค้นด้วยเลขเอกสาร'):null,
+      h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:8}},'หรือแตะเอกสารตัวอย่าง:'),
       h('div',{style:{display:'flex',flexDirection:'column',gap:6}},
-        sample.slice(0,4).map(r=>h('div',{key:r.id,onClick:()=>this.setState({scanModal:false,trackResult:r.id,trackQ:r.id,page:'tracking'}),style:{cursor:'pointer',display:'flex',alignItems:'center',gap:9,padding:'9px 12px',border:'1px solid '+this.LINE,borderRadius:9}},
+        sample.slice(0,4).map(r=>h('div',{key:r.id,onClick:()=>{ this.stopScan(); this.setState({scanModal:false,scanErr:false,trackResult:r.id,trackQ:r.id,page:'tracking'}); },style:{cursor:'pointer',display:'flex',alignItems:'center',gap:9,padding:'9px 12px',border:'1px solid '+this.LINE,borderRadius:9}},
           h('span',{style:{fontSize:9.5,fontWeight:700,color:'#fff',background:r.kind==='br'?this.BLUE:this.GREEN,padding:'2px 6px',borderRadius:5}},r.kind==='br'?'BR':'PR'),
           h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:12.5,fontWeight:600}},r.id),
           h('span',{style:{flex:1,fontSize:11.5,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.kind==='br'?r.itemName:r.items[0].d)))),
-      h('button',{onClick:close,style:{width:'100%',marginTop:16,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer'}},'\u0e1b\u0e34\u0e14')));
+      h('button',{onClick:close,style:{width:'100%',marginTop:16,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer'}},'ปิด')));
   }
 
   exportSheet(){
