@@ -218,7 +218,7 @@ class Component extends DCLogic {
         onKeyDown:e=>{if(e.key==='Enter')this.login();},
         style:{width:'100%',padding:'12px 14px',border:'1.5px solid '+this.LINE,borderRadius:11,fontSize:14,outline:'none',background:'#fff'}}));
     const panel=h('div',{style:{width:R.isMobile?'100%':400,maxWidth:'100%',padding:R.isMobile?'30px 24px':'38px 40px',background:'#fff',borderRadius:R.isMobile?0:18,boxShadow:R.isMobile?'none':'0 24px 70px rgba(10,25,22,.18)'}},
-      h('img',{src:'assets/thamc_logo.jpg',alt:'THAMC',style:{height:40,objectFit:'contain',marginBottom:22,maxWidth:'100%'}}),
+      h('div',{style:{display:'flex',justifyContent:'center',marginBottom:22}},h('img',{src:'assets/thamc_mark.jpg',alt:'THAMC',style:{height:R.isMobile?104:120,objectFit:'contain',maxWidth:'100%'}})),
       h('div',{style:{fontSize:21,fontWeight:700,letterSpacing:-.3}},'เข้าสู่ระบบ ERP'),
       h('div',{style:{fontSize:13,color:this.MUTE,marginTop:4,marginBottom:24}},'ระบบขออนุมัติจัดสรรงบ–จัดซื้อ ศูนย์การแพทย์ธรรมศาสตร์'),
       field('ชื่อผู้ใช้ (Username)','loginU'),
