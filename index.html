@@ -218,7 +218,7 @@ class Component extends DCLogic {
       h('input',{type:type||'text',value:this.state[key],onChange:e=>this.setState({[key]:e.target.value,loginErr:''}),
         onKeyDown:e=>{if(e.key==='Enter')this.login();},
         style:{width:'100%',padding:'12px 14px',border:'1.5px solid '+this.LINE,borderRadius:11,fontSize:14,outline:'none',background:'#fff'}}));
-    const panel=h('div',{style:{width:R.isMobile?'100%':400,maxWidth:'100%',padding:R.isMobile?'30px 24px':'38px 40px',background:'#fff',borderRadius:R.isMobile?0:18,boxShadow:R.isMobile?'none':'0 24px 70px rgba(10,25,22,.18)'}},
+    const panel=h('div',{style:{width:R.isMobile?'100%':400,maxWidth:'100%',padding:R.isMobile?'calc(30px + env(safe-area-inset-top)) 24px 30px':'38px 40px',background:'#fff',borderRadius:R.isMobile?0:18,boxShadow:R.isMobile?'none':'0 24px 70px rgba(10,25,22,.18)'}},
       h('div',{style:{display:'flex',justifyContent:'center',marginBottom:22}},h('img',{src:'assets/thamc_mark.jpg',alt:'THAMC',style:{height:R.isMobile?104:120,objectFit:'contain',maxWidth:'100%'}})),
       h('div',{style:{fontSize:21,fontWeight:700,letterSpacing:-.3}},'เข้าสู่ระบบ ERP'),
       h('div',{style:{fontSize:13,color:this.MUTE,marginTop:4,marginBottom:24}},'ระบบขออนุมัติจัดสรรงบ–จัดซื้อ ศูนย์การแพทย์ธรรมศาสตร์'),
@@ -1677,7 +1677,7 @@ class Component extends DCLogic {
     const h=React.createElement; const R=this.R; const close=()=>this.setState({sel:null});
     return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.45)',zIndex:80,display:'flex',justifyContent:'center',alignItems:'flex-start',padding:R.isMobile?0:'40px 20px',overflowY:'auto',animation:'overlayIn .15s'}},
       h('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:R.isMobile?0:16,width:'100%',maxWidth:800,minHeight:R.isMobile?'100vh':'auto',boxShadow:'0 24px 60px rgba(10,25,22,.3)',animation:'sheetIn .22s cubic-bezier(.2,.7,.3,1)',overflow:'hidden'}},
-        h('div',{style:{padding:R.isMobile?'16px 18px':'20px 24px',borderBottom:'1px solid '+this.LINE,display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:14,position:R.isMobile?'sticky':'static',top:0,background:'#fff',zIndex:2}},
+        h('div',{style:{padding:R.isMobile?'calc(16px + env(safe-area-inset-top)) 18px 16px':'20px 24px',borderBottom:'1px solid '+this.LINE,display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:14,position:R.isMobile?'sticky':'static',top:0,background:'#fff',zIndex:2}},
           h('div',{style:{minWidth:0}},title,sub),
           h('button',{onClick:close,style:{border:'1px solid '+this.LINE,background:'#fff',width:34,height:34,borderRadius:9,cursor:'pointer',fontSize:16,color:this.MUTE,flexShrink:0}},'\u2715')),
         body, footer));
@@ -2078,7 +2078,7 @@ class Component extends DCLogic {
         this.persistBudgetSap(codes,tot).then(db=>this.dbToast('งบประมาณ',db));
         done('นำเข้ารายงานงบประมาณแล้ว — '+codes.length+' เลขงบ · กำลังบันทึกฐานข้อมูล…');
       } else if(kind==='po'){ const x=this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.po.length+' ใบ) · กำลังบันทึกฐานข้อมูล…'); }
-      else if(kind==='gr'){ const x=this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+x.n+' รายการ (จับคู่เข้า PO) · กำลังบันทึกฐานข้อมูล…'); }
+      else if(kind==='gr'){ const x=this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+x.n+' ใบตรวจรับ ('+x.lines+' รายการย่อย จับคู่เข้า PO) · กำลังบันทึกฐานข้อมูล…'); }
       else if(kind==='ap'){ const x=this.ingestAp(rows,num); done('นำเข้าใบตั้งหนี้ — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.ap.length+' ใบ) · กำลังบันทึกฐานข้อมูล…'); }
       else if(kind==='pay'){ const x=this.ingestPay(rows,num); done('นำเข้าการจ่ายเงิน — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.pay.length+' รายการ) · กำลังบันทึกฐานข้อมูล…'); }
       else done('นำเข้าไฟล์แล้ว');
@@ -2104,8 +2104,8 @@ class Component extends DCLogic {
     const arr=Object.values(m).map(o=>{ o.tr=o.open<=0.01?'full':(o.open>=o.qty-0.01?'await':'partial'); o.dn=this.deptName(o.dept); o.val=Math.round(o.val); o.gd=0; o.ap=0; o.paid=0; o.grl=[];
       const dd=dnum?dnum(o.deliv):0; o.od=(o.tr!=='full'&&dd&&dd<TODAY)?1:0; o.odDays=0; return o; });
     const merged=this.mergeByKey(this.D.po,arr,'doc'); this.D.po=merged.list; this.saveSapLocal(); this.persistSap('sap_po',arr).then(db=>this.dbToast('PO',db)); return {n:arr.length,added:merged.added,upd:merged.upd}; }
-  ingestGr(rows,num){ const byPo={}; let cnt=0; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue; cnt++; const base=r[34]||''; (byPo[base]=byPo[base]||[]).push({d:doc,date:r[6]||'',val:Math.round(num(r[26]))}); }
-    (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.length; p.grl=g.slice(0,6); } }); this.saveSapLocal(); this.persistSap('sap_po',this.D.po).then(db=>this.dbToast('GR',db)); return {n:cnt,added:cnt,upd:0}; }
+  ingestGr(rows,num){ const byPo={}; const seenDoc={}; let lines=0, docs=0; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue; lines++; const base=r[34]||''; const g=(byPo[base]=byPo[base]||{docs:[],seen:{},val:0}); g.val+=Math.round(num(r[26])); if(!g.seen[doc]){ g.seen[doc]=true; g.docs.push({d:doc,date:r[6]||'',val:Math.round(num(r[26]))}); if(!seenDoc[doc]){ seenDoc[doc]=true; docs++; } } }
+    (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.docs.length; p.grl=g.docs.slice(0,6); } }); this.saveSapLocal(); this.persistSap('sap_po',this.D.po).then(db=>this.dbToast('GR',db)); return {n:docs,added:docs,upd:0,lines:lines}; }
   ingestAp(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,post:r[5]||'',vc:r[8]||'',vn:r[9]||'',dept:r[31]||'',base:r[37]||'',exp:r[47]||'',val:0,paid:false,payDate:'',payDoc:'',method:''}; } o.val+=num(r[25]); }
     const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); const merged=this.mergeByKey(this.D.ap,arr,'doc'); this.D.ap=merged.list; this.linkApToPo(); this.saveSapLocal(); this.persistSap('sap_ap',arr).then(db=>this.dbToast('ใบตั้งหนี้',db)); return {n:arr.length,added:merged.added,upd:merged.upd}; }
@@ -2245,7 +2245,7 @@ class Component extends DCLogic {
         h('tr',null,h('td',{style:{padding:'4px 8px',color:this.MUTE,verticalAlign:'top'}},'เหตุผลความจำเป็น'),h('td',{style:{padding:'4px 8px'}},rec.reason)))),
       h('div',{style:{textIndent:32,fontSize:13,margin:'10px 0 4px'}},'จึงเรียนมาเพื่อโปรดพิจารณาอนุมัติงบประมาณตามรายการดังกล่าว จักขอบพระคุณยิ่ง'));
     const signers = br? [['ผู้ขออนุมัติ',rec.requester],['หัวหน้าหน่วยงาน',''],['ผู้อนุมัติงบประมาณ','']] : [['ผู้เสนอความต้องการ',rec.requester],['หัวหน้างาน',''],['เจ้าหน้าที่พัสดุ','']];
-    return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.55)',zIndex:88,display:'flex',justifyContent:'center',alignItems:'flex-start',padding:R.isMobile?'0':'26px 20px',overflowY:'auto',animation:'overlayIn .15s'}},
+    return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.55)',zIndex:88,display:'flex',justifyContent:'center',alignItems:'flex-start',padding:R.isMobile?'calc(12px + env(safe-area-inset-top)) 10px 10px':'26px 20px',overflowY:'auto',animation:'overlayIn .15s'}},
       h('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',maxWidth:800,animation:'sheetIn .22s'}},
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,gap:10}},
           h('div',{style:{color:'#fff',fontSize:13,fontWeight:600}},br?'เอกสาร: ใบขออนุมัติงบประมาณ':'เอกสาร: ใบเสนอความต้องการซื้อ/จ้าง/เช่า'),
