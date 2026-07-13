@@ -2039,18 +2039,20 @@ class Component extends DCLogic {
               h('div',{style:{flex:1,minWidth:0}},h('div',{style:{fontSize:13.5,fontWeight:600}},f.label)),
               this.pill(this.fmtN(f.n)+' '+f.unit, f.c, f.c+'18', true)),
             h('div',{style:{fontSize:11.5,color:this.MUTE,marginBottom:12,lineHeight:1.5}},f.desc),
-            u? h('div',{style:{display:'flex',alignItems:'center',gap:8,fontSize:12,color:this.GREEN,background:this.GREENBG,borderRadius:8,padding:'8px 11px'}},h('span',null,'✓'),'นำเข้าแล้ว: '+u.name+' · '+u.at)
-             : h('label',{style:{display:'flex',alignItems:'center',justifyContent:'center',gap:8,fontSize:12.5,color:f.c,border:'1.5px dashed '+f.c,borderRadius:9,padding:'10px',cursor:'pointer',fontWeight:600}},
-                h('span',null,'⤒'),'เลือกไฟล์ '+f.k.toUpperCase()+' เพื่ออัปโหลด',
-                h('input',{type:'file',accept:'.xlsx,.xls,.csv',style:{display:'none'},onChange:e=>this.onSapUpload(f.k,e.target.files&&e.target.files[0])})) ); })),
+            u? h('div',{style:{display:'flex',alignItems:'center',gap:8,fontSize:11.5,color:this.GREEN,background:this.GREENBG,borderRadius:8,padding:'7px 10px',marginBottom:9}},h('span',null,'✓'),h('span',{style:{flex:1,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},'ล่าสุด: '+u.name+' · '+u.at+(u.status&&u.status!=='สำเร็จ'?' · '+u.status:''))):null,
+            h('label',{style:{display:'flex',alignItems:'center',justifyContent:'center',gap:8,fontSize:12.5,color:f.c,border:'1.5px dashed '+f.c,borderRadius:9,padding:'10px',cursor:'pointer',fontWeight:600}},
+                h('span',null,'⤒'),(u?'อัปเดต / นำเข้าใหม่ ':'เลือกไฟล์ ')+f.k.toUpperCase(),
+                h('input',{type:'file',accept:'.xlsx,.xls,.csv',style:{display:'none'},onChange:e=>{ this.onSapUpload(f.k,e.target.files&&e.target.files[0]); e.target.value=''; }})) ); })),
       this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
-        this.secTitle('สรุปยอดจากรายงานงบประมาณ SAP ล่าสุด'),
-        h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr 1fr':'repeat(4,1fr)',gap:14}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:10}},
+          this.secTitle('สรุปยอดจากรายงานงบประมาณ SAP ล่าสุด'),
+          (this.D.po||[]).length||(this.D.ap||[]).length||bs.codes.length? h('button',{onClick:()=>this.clearSap(),style:{padding:'7px 13px',border:'1px solid '+this.LINE,background:'#fff',color:this.RED,borderRadius:8,fontSize:11.5,cursor:'pointer',fontWeight:600}},'ล้างข้อมูล SAP ทั้งหมด'):null),
+        h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr 1fr':'repeat(4,1fr)',gap:14,marginTop:12}},
           this.miniStat('งบปัจจุบันรวม',this.bahtM(bs.totals.current||0),this.INK),
           this.miniStat('ผูกพัน (PO)',this.bahtM(bs.totals.commit||0),this.BLUE),
           this.miniStat('ใช้จริง',this.bahtM(bs.totals.actual||0),this.TEAL),
           this.miniStat('คงเหลือ (Available)',this.bahtM(bs.totals.avail||0),this.GREEN)),
-        h('div',{style:{fontSize:11.5,color:this.MUTE,marginTop:14,lineHeight:1.6}},'ℹ️ ในเวอร์ชันใช้งานจริง ระบบจะอ่านค่าจากไฟล์ที่อัปโหลดและปรับยอดคงเหลือของแต่ละเลขงบอัตโนมัติ — เดโมนี้แสดงยอดจากรายงานตัวอย่าง '+this.fmtN(bs.codes.length)+' เลขงบ')),{marginBottom:0}));
+        h('div',{style:{fontSize:11.5,color:this.MUTE,marginTop:14,lineHeight:1.6}},'ℹ️ ยอดคำนวณจากรายงานงบประมาณที่อัปโหลดล่าสุด ('+this.fmtN(bs.codes.length)+' เลขงบ) — อัปโหลดไฟล์ใหม่เพื่ออัปเดตยอด ระบบจะ upsert ทับด้วยเลขงบ/เลขเอกสารเดิมโดยอัตโนมัติ')),{marginBottom:0}));
   }
   onSapUpload(kind,file){ if(!file) return; const nm=file.name.length>28?file.name.slice(0,28)+'…':file.name;
     this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'กำลังประมวลผล…'}})}));
@@ -2083,6 +2085,13 @@ class Component extends DCLogic {
     }).catch(err=>{ this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'ผิดพลาด'}})})); this.toastMsg('อ่านไฟล์ไม่สำเร็จ: '+(err.message||err)); });
   }
   deptName(c){ return (this.D.deptNames&&this.D.deptNames[c])||('หน่วยงาน '+(c||'')); }
+  async clearSap(){ if(!(typeof window!=='undefined'&&window.confirm&&window.confirm('ล้างข้อมูล SAP ทั้งหมด (PO/GR/AP/จ่าย/งบ) ทั้งในเครื่องและฐานข้อมูล?'))) return;
+    this.D.po=[]; this.D.ap=[]; this.D.pay=[]; this.D.budgetSap={generated:this.D.meta.today,codes:[],totals:{current:0,commit:0,actual:0,avail:0}};
+    this.setState({uploads:{}}); this.saveSapLocal();
+    const sb=this._sb;
+    if(sb&&this.state.online){ try{ for(const t of ['sap_po','sap_ap','sap_payment']) await sb.from(t).delete().neq('doc',''); await sb.from('sap_budget').delete().neq('exp',''); this.toastMsg('ล้างข้อมูล SAP ทั้งในเครื่องและฐานข้อมูลแล้ว'); }catch(e){ this.toastMsg('ล้างในเครื่องแล้ว — ฐานข้อมูล: '+((e&&e.message)||'ผิดพลาด')); } }
+    else this.toastMsg('ล้างข้อมูล SAP ในเครื่องแล้ว (โหมดสาธิต)');
+    this.forceUpdate&&this.forceUpdate(); }
   async persistBudgetSap(codes,tot){ const sb=this._sb; if(!sb||!this.state.online) return {ok:false,offline:true,count:0}; if(!codes||!codes.length) return {ok:true,count:0};
     try{ const payload=codes.map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:c.current,commit:c.commit,actual:c.actual,avail:c.avail,dept:c.dept,dept_code:c.deptCode}));
       const CH=500; let done=0; for(let i=0;i<payload.length;i+=CH){ const chunk=payload.slice(i,i+CH); const r=await sb.from('sap_budget').upsert(chunk,{onConflict:'exp'}); if(r&&r.error){ console.warn('persistBudget',r.error); return {ok:false,count:done,err:(r.error.message||JSON.stringify(r.error))}; } done+=chunk.length; }
