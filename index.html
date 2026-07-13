@@ -141,6 +141,7 @@ class Component extends DCLogic {
     ]},
     {zone:'ตั้งค่า & ข้อมูล',items:[
       {key:'data-sync',label:'นำเข้าข้อมูล SAP',icon:'⤒',roles:['procurement','budget','finance','exec']},
+      {key:'flowchart',label:'ผังกระบวนการ',icon:'⧉',roles:['admin']},
       {key:'settings',label:'ตั้งค่าระบบ',icon:'⚙',roles:['admin','exec']}
     ]}
   ];
@@ -429,6 +430,7 @@ class Component extends DCLogic {
       case 'item-pro': return this.pgItemPro();
       case 'settings': return this.pgSettings();
       case 'data-sync': return this.pgDataSync();
+      case 'flowchart': return this.pgFlow();
       case 'br-approval': return this.pgBrApproval();
       case 'br-allocate': return this.pgBrAllocate();
       case 'pr-queue': return this.pgPrQueue();
@@ -1960,6 +1962,20 @@ class Component extends DCLogic {
   async clearDemo(){ const sb=this._sb;
     if(sb&&this.state.online){ try{ await sb.from('purchase_requests').delete().neq('id',''); await sb.from('budget_requests').delete().neq('id',''); await sb.from('item_code_requests').delete().gte('id',0); }catch(e){ console.warn(e); } }
     this.setState({br:[],pr:[],icrRows:[]}); this.toastMsg('ล้างข้อมูลตัวอย่างทั้งหมดแล้ว — เริ่มคีย์ข้อมูลจริงได้เลย'); }
+  pgFlow(){
+    const h=React.createElement; const R=this.R;
+    return h('div',null,
+      this.pageHead? null : null,
+      h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,gap:10,flexWrap:'wrap'}},
+        h('div',null,
+          h('div',{style:{fontSize:R.isMobile?18:21,fontWeight:700}},'ผังกระบวนการ ERP'),
+          h('div',{style:{fontSize:12.5,color:this.MUTE,marginTop:3}},'ภาพรวมเส้นทางเอกสาร ขออนุมัติจัดสรรงบ → จ่ายเงิน (เชื่อม SAP ด้วยรายงาน) · เฉพาะผู้ดูแลระบบ')),
+        h('a',{href:'Flowchart.dc.html',target:'_blank',style:{padding:'9px 16px',border:'1px solid '+this.TEAL,background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}},'เปิดเต็มจอ / พิมพ์ PDF ↗')),
+      this.card(h('div',{style:{padding:0,overflow:'hidden',borderRadius:14}},
+        h('div',{style:{width:'100%',overflowX:'auto',background:'#e8ecec'}},
+          h('iframe',{src:'Flowchart.dc.html',title:'ผังกระบวนการ ERP',style:{width:1400,height:1720,border:'none',display:'block'}})))));
+  }
+
   pgDataSync(){
     const h=React.createElement; const R=this.R; const up=this.state.uploads||{};
     const bs=this.D.budgetSap||{codes:[],totals:{}};

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#e8ecec;font-family:'IBM Plex Sans Thai',sans-serif;color:#182421}
+  .mono{font-family:'IBM Plex Mono',monospace}
+</style>
+</helmet>
+<div style="width:1400px;margin:0 auto;background:#fff;padding:52px 60px 60px">
+
+  <!-- header -->
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;border-bottom:3px solid #0f5f52;padding-bottom:18px;margin-bottom:6px">
+    <div>
+      <div style="font-size:13px;font-weight:600;letter-spacing:3px;color:#0f5f52">THAMC · ERP WORKFLOW</div>
+      <div style="font-size:30px;font-weight:700;letter-spacing:-.5px;margin-top:6px">ผังกระบวนการจัดสรรงบประมาณ–จัดซื้อ–จ่ายเงิน</div>
+      <div style="font-size:14px;color:#5a6b67;margin-top:5px">ศูนย์การแพทย์ธรรมศาสตร์ · เชื่อมกับ SAP ด้วยรายงาน (Report) โดยไม่ต้อง Interface</div>
+    </div>
+    <div style="text-align:right;font-size:12px;color:#5a6b67;line-height:1.9">
+      <div><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#0f5f52;margin-right:6px"></span>ระบบ ERP (นอก SAP)</div>
+      <div><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#b5810c;margin-right:6px"></span>จุดตัดสินใจ</div>
+      <div><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#2f6f8f;margin-right:6px"></span>ข้อมูลจาก SAP (รายงาน)</div>
+    </div>
+  </div>
+
+  <!-- role legend row -->
+  <div style="display:flex;gap:10px;margin:22px 0 30px;flex-wrap:wrap">
+    <div style="font-size:12px;color:#5a6b67;align-self:center;margin-right:4px">บทบาท:</div>
+    <span style="font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:20px;background:#e4f0ed;color:#0f5f52">ผู้ขอซื้อ</span>
+    <span style="font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:20px;background:#ece9f6;color:#6a57a6">ผู้บริหาร</span>
+    <span style="font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:20px;background:#faf0d6;color:#8a6208">จนท.งบประมาณ</span>
+    <span style="font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:20px;background:#dbeaf2;color:#2f6f8f">จนท.พัสดุ/จัดซื้อ</span>
+    <span style="font-size:12.5px;font-weight:600;padding:6px 13px;border-radius:20px;background:#e0efe7;color:#1f7a4d">การเงิน</span>
+  </div>
+
+  <!-- two-column: main flow + SAP link panel -->
+  <div style="display:grid;grid-template-columns:1fr 340px;gap:44px">
+
+    <!-- MAIN FLOW -->
+    <div id="flow"></div>
+
+    <!-- SAP LINK PANEL -->
+    <div>
+      <div style="position:sticky;top:20px">
+        <div style="background:#0d2b26;border-radius:16px;padding:26px 24px;color:#dfeae7">
+          <div style="font-size:12px;letter-spacing:2px;color:#7fb7ab;font-weight:600">SAP LINKAGE</div>
+          <div style="font-size:18px;font-weight:700;margin:8px 0 4px;color:#fff">เชื่อมด้วยเลขที่เอกสาร</div>
+          <div style="font-size:12.5px;line-height:1.7;color:#a9c4be">ระบบ ERP ออกเลข BR/PR — เจ้าหน้าที่นำไปทำใน SAP แล้วกรอกเลข PO กลับ ระบบดึงสถานะจากรายงานมาต่อไทม์ไลน์เอง</div>
+          <div id="saplink" style="margin-top:20px"></div>
+          <div style="margin-top:22px;padding-top:18px;border-top:1px solid #244a43;font-size:11.5px;line-height:1.8;color:#8fb3ac">
+            <div style="color:#fff;font-weight:600;margin-bottom:6px">Reference คีย์เชื่อม</div>
+            เลขงบประมาณ (Budget Reserve No) เป็น Ref กลาง — SAP ตัดงบด้วยเลขงบ และย้อนกลับหาเอกสารต้นทางด้วยเลข PO ที่กรอกกลับเข้า PR/BR
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:40px;padding-top:16px;border-top:1px solid #d5dcda;font-size:11.5px;color:#8a9793;display:flex;justify-content:space-between">
+    <span>ผู้ใช้ทุกบทบาทติดตามสถานะได้แบบเรียลไทม์จากไทม์ไลน์เดียว (BR → PR → PO → GR → ตั้งหนี้ → จ่าย)</span>
+    <span class="mono">THAMC-ERP · v3</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  ROLE = {
+    req:{bg:'#e4f0ed',c:'#0f5f52',n:'ผู้ขอซื้อ'},
+    exec:{bg:'#ece9f6',c:'#6a57a6',n:'ผู้บริหาร'},
+    bud:{bg:'#faf0d6',c:'#8a6208',n:'จนท.งบประมาณ'},
+    proc:{bg:'#dbeaf2',c:'#2f6f8f',n:'จนท.พัสดุ/จัดซื้อ'},
+    fin:{bg:'#e0efe7',c:'#1f7a4d',n:'การเงิน'}
+  };
+
+  componentDidMount(){ this.renderFlow(); this.renderSap(); }
+
+  chip(role){ const h=React.createElement; const r=this.ROLE[role]; return h('span',{style:{fontSize:11,fontWeight:600,padding:'3px 10px',borderRadius:20,background:r.bg,color:r.c,whiteSpace:'nowrap'}},r.n); }
+
+  // a process step card
+  node(num,role,title,desc,accent){ const h=React.createElement; const r=this.ROLE[role];
+    return h('div',{style:{position:'relative',border:'1.5px solid '+(accent||'#d5dcda'),borderLeft:'5px solid '+r.c,borderRadius:13,background:'#fff',padding:'16px 20px',boxShadow:'0 2px 6px rgba(10,30,25,.05)'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:7}},
+        h('div',{style:{width:26,height:26,borderRadius:'50%',background:r.c,color:'#fff',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}},num),
+        h('div',{style:{fontSize:16,fontWeight:700,flex:1}},title),
+        this.chip(role)),
+      desc?h('div',{style:{fontSize:13,color:'#5a6b67',lineHeight:1.6,paddingLeft:36}},desc):null);
+  }
+
+  arrow(label){ const h=React.createElement;
+    return h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',padding:'7px 0'}},
+      label?h('div',{style:{fontSize:11.5,color:'#8a6208',fontWeight:600,marginBottom:3,background:'#faf0d6',padding:'2px 10px',borderRadius:12}},label):null,
+      h('div',{style:{width:2,height:label?12:20,background:'#b7c2bf'}}),
+      h('div',{style:{width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',borderTop:'8px solid #b7c2bf'}}));
+  }
+
+  // decision diamond
+  decide(num,role,q,yes,no){ const h=React.createElement; const r=this.ROLE[role];
+    return h('div',null,
+      h('div',{style:{border:'1.5px solid #e0b84e',borderLeft:'5px solid '+r.c,background:'#fffcf3',borderRadius:13,padding:'15px 20px'}},
+        h('div',{style:{display:'flex',alignItems:'center',gap:10}},
+          h('div',{style:{width:26,height:26,borderRadius:7,background:'#b5810c',color:'#fff',fontSize:13,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',transform:'rotate(45deg)',flexShrink:0}},h('span',{style:{transform:'rotate(-45deg)'}},'?')),
+          h('div',{style:{fontSize:15.5,fontWeight:700,flex:1}},q),
+          this.chip(role))),
+      h('div',{style:{display:'flex',gap:14,marginTop:12,paddingLeft:14}},
+        yes.map((b,i)=>h('div',{key:i,style:{flex:1,display:'flex',flexDirection:'column',alignItems:'center'}},
+          h('div',{style:{fontSize:11.5,fontWeight:700,color:b.c,marginBottom:5}},b.br),
+          h('div',{style:{width:2,height:12,background:b.c}}),
+          h('div',{style:{width:0,height:0,borderLeft:'6px solid transparent',borderRight:'6px solid transparent',borderTop:'8px solid '+b.c}}),
+          h('div',{style:{marginTop:8,fontSize:12.5,textAlign:'center',padding:'9px 12px',borderRadius:10,background:b.bg,color:b.tc,fontWeight:600,width:'100%',lineHeight:1.4}},b.to)))));
+  }
+
+  renderFlow(){ const h=React.createElement; const el=this.refFlow||document.getElementById('flow'); if(!el) return;
+    const kids=[
+      this.node('1','req','สร้างใบขออนุมัติจัดสรรงบ (BR)','กรอกรายการที่ต้องการ + เลือกเลขงบประมาณ (Budget Reserve No) ระบบตรวจงบคงเหลือจากรายงาน SAP ก่อนส่ง'),
+      this.arrow('ส่งพิจารณา'),
+      this.decide('2','exec','ผู้บริหารพิจารณาคำขอ',[
+        {br:'ไม่อนุมัติ',c:'#c34534',to:'จบกระบวนการ — แจ้งผู้ขอ',bg:'#fbe9e6',tc:'#c34534'},
+        {br:'ส่งกลับแก้ไข',c:'#b5810c',to:'กลับไปขั้นที่ 1 แก้ไขและยื่นใหม่',bg:'#faf0d6',tc:'#8a6208'},
+        {br:'อนุมัติ',c:'#1f7a4d',to:'ส่งต่อเจ้าหน้าที่งบประมาณ',bg:'#e0efe7',tc:'#1f7a4d'}
+      ]),
+      this.arrow(),
+      this.node('3','bud','อนุมัติจัดสรรงบ + ตรวจรหัสพัสดุ','เจ้าหน้าที่งบประมาณอนุมัติ และตรวจสอบ/ขอออกเลขรหัสพัสดุกับ Item Master Pro ผ่าน API (Realtime)'),
+      this.arrow('Copy to PR'),
+      this.node('4','req','จัดทำใบขอซื้อ (PR)','คัดลอกข้อมูลจาก BR มาสร้าง PR อัตโนมัติ — หรือคีย์ PR ตรงได้โดยไม่ต้องผ่านการอนุมัติงบก็ได้',null),
+      this.arrow('ส่งพัสดุ'),
+      this.decide('5','proc','พัสดุรับเรื่อง',[
+        {br:'ส่งแก้ไข',c:'#b5810c',to:'ส่งกลับผู้ขอแก้ไข PR',bg:'#faf0d6',tc:'#8a6208'},
+        {br:'รับเรื่อง',c:'#1f7a4d',to:'ดำเนินการจัดซื้อใน SAP',bg:'#e0efe7',tc:'#1f7a4d'}
+      ]),
+      this.arrow(),
+      this.node('6','proc','ทำ PO ใน SAP → กรอกเลข PO กลับ','เจ้าหน้าที่สร้างใบสั่งซื้อในระบบ SAP แล้วกรอกเลข PO กลับเข้าระบบ ERP เพื่อผูกกับ PR/BR',' #2f6f8f'),
+      this.arrow('ระบบดึงรายงาน SAP'),
+      this.node('7','proc','ติดตาม PO → GR → ตั้งหนี้ (AP)','ระบบดึงสถานะจากรายงาน SAP มาต่อไทม์ไลน์อัตโนมัติ: ออก PO → รับของ (GR) → ตั้งหนี้ (AP Invoice)',' #2f6f8f'),
+      this.arrow(),
+      this.node('8','fin','ติดตาม/บันทึกการจ่ายเงิน','การเงินติดตามการจ่ายจากรายงาน SAP — พร้อมตัดงบประมาณจริง (Budget) ด้วยเลขงบที่อ้างอิง'),
+      this.arrow('เสร็จสมบูรณ์'),
+      h('div',{style:{border:'none',borderRadius:13,background:'#0f5f52',color:'#fff',padding:'16px 22px',display:'flex',alignItems:'center',gap:12}},
+        h('div',{style:{fontSize:20}},'✓'),
+        h('div',null,
+          h('div',{style:{fontSize:15.5,fontWeight:700}},'จบกระบวนการ — จ่ายเงินสำเร็จ'),
+          h('div',{style:{fontSize:12.5,color:'#bfded7',marginTop:2}},'ทุกบทบาทติดตามไทม์ไลน์เดียวได้ทุกขั้นตอน')))
+    ];
+    const root=React.createElement('div',{style:{display:'flex',flexDirection:'column'}},kids);
+    (window.ReactDOM.createRoot?window.ReactDOM.createRoot(el):null)?window.ReactDOM.createRoot(el).render(root):window.ReactDOM.render(root,el);
+  }
+
+  renderSap(){ const h=React.createElement; const el=document.getElementById('saplink'); if(!el) return;
+    const step=(code,label,side)=>h('div',{style:{display:'flex',alignItems:'center',gap:12,marginBottom:0}},
+      h('div',{style:{width:78,textAlign:'right',fontSize:10.5,fontWeight:600,color:side==='erp'?'#7fb7ab':'#8fb3ac'}},side==='erp'?'ERP':'SAP'),
+      h('div',{style:{flex:1,background:side==='erp'?'#12463d':'#1c3a52',border:'1px solid '+(side==='erp'?'#2a6157':'#2c5675'),borderRadius:9,padding:'10px 13px'}},
+        h('div',{className:'mono',style:{fontSize:13,fontWeight:700,color:'#fff'}},code),
+        h('div',{style:{fontSize:11,color:side==='erp'?'#a9c4be':'#9fbdd4',marginTop:1}},label)));
+    const conn=()=>h('div',{style:{display:'flex',justifyContent:'center',padding:'4px 0'}},h('div',{style:{color:'#5c8a80',fontSize:15}},'↓'));
+    const root=h('div',null,
+      step('BR-25xx-001','ขออนุมัติจัดสรรงบ','erp'),conn(),
+      step('PR-25xx-001','ใบขอซื้อ','erp'),conn(),
+      step('PO 45xxxxxxxx','ใบสั่งซื้อ (กรอกกลับ)','sap'),conn(),
+      step('GR 50xxxxxxxx','ใบรับของ','sap'),conn(),
+      step('AP 19xxxxxxxx','ใบตั้งหนี้','sap'),conn(),
+      step('Budget Ref','ตัดงบประมาณจริง','sap'));
+    (window.ReactDOM.createRoot?window.ReactDOM.createRoot(el).render(root):window.ReactDOM.render(root,el));
+  }
+}
+</script>
+</body>
+</html>
