@@ -234,11 +234,7 @@ class Component extends DCLogic {
       field('รหัสผ่าน (Password)','loginP','password'),
       this.state.loginErr? h('div',{style:{background:this.REDBG,color:this.RED,fontSize:12.5,padding:'9px 13px',borderRadius:9,marginBottom:14,display:'flex',alignItems:'center',gap:7}},h('span',null,'⚠'),this.state.loginErr):null,
       h('button',{onClick:()=>this.login(),style:{width:'100%',padding:'13px',border:'none',borderRadius:11,background:this.TEAL,color:'#fff',fontSize:14.5,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 10px rgba(13,110,99,.3)'}},'เข้าสู่ระบบ'),
-      h('button',{onClick:()=>this.doInstall(),style:{width:'100%',marginTop:10,padding:'11px',border:'1.5px solid '+this.TEAL,borderRadius:11,background:'#fff',color:this.TEAL,fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:7}},h('span',null,'⬇'),'ติดตั้งเป็นแอปบนมือถือ (PWA)'),
-      h('div',{style:{marginTop:20,padding:'12px 14px',background:this.PANEL,borderRadius:10,fontSize:11.5,color:this.MUTE,lineHeight:1.7}},
-        h('div',{style:{fontWeight:600,color:this.INK,marginBottom:3}},'บัญชีสำหรับทดลองใช้งาน'),
-        h('div',null,'ผู้ดูแลระบบ — ',h('b',{style:{fontFamily:"'IBM Plex Mono',monospace",color:this.INK}},'Admin / Admin'),' (เข้าได้ทุกเมนู สลับบทบาทได้)'),
-        h('div',null,'ตามบทบาท — requester / budget / procure / finance / exec  (รหัส ',h('b',{style:{fontFamily:"'IBM Plex Mono',monospace",color:this.INK}},'1234'),')')));
+      h('button',{onClick:()=>this.doInstall(),style:{width:'100%',marginTop:10,padding:'11px',border:'1.5px solid '+this.TEAL,borderRadius:11,background:'#fff',color:this.TEAL,fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:7}},h('span',null,'⬇'),'ติดตั้งเป็นแอปบนมือถือ (PWA)'));
     return h('div',{style:{minHeight:'100vh',display:'flex',background:this.SIDE}},
       R.isMobile?null:h('div',{style:{flex:1,color:'#fff',padding:'56px 54px',display:'flex',flexDirection:'column',justifyContent:'center',overflow:'hidden',background:'linear-gradient(150deg,#0f2e2a,#17423b)'}},
         h('div',{style:{display:'flex',alignItems:'center',gap:13,marginBottom:26}},
@@ -719,7 +715,8 @@ class Component extends DCLogic {
     this.setState({prDraft:draft,page:'pr-create',sel:null,drawer:false}); this.toastMsg('สร้างใบขอซื้อใหม่ — กรอกรายละเอียดให้ครบแล้วส่ง'); window.scrollTo&&window.scrollTo(0,0); }
   // ส่งใบขอซื้อ (PR) จากหน้าสร้างใบขอซื้อ
   submitPr(draft){ if(draft.editId){ const ex=this.prById(draft.editId); if(ex){ const inc2=draft.vatMode==='incl'; const lt2=it=>it.vat?(inc2?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0; const s2=draft.items.reduce((a,it)=>a+((it.total||0)-(inc2?lt2(it):0)),0); const v2=draft.items.reduce((a,it)=>a+lt2(it),0);
-      this.persistPr(Object.assign({},ex,{items:draft.items,sub:s2,vat:v2,total:s2+v2,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,committee:(draft.committee||[]).filter(c=>c&&c.trim()),tel:draft.tel,neededDate:draft.neededDate,status:'ยื่นเสนอซื้อ',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและส่งใบขอซื้อใหม่',by:draft.requester,at:this.now(),note:'แก้ไขตามที่พัสดุแจ้งและส่งกลับให้พัสดุอีกครั้ง'}])})); }
+      const prevVer=ex.ver||1; const versions=(ex.versions||[]).concat([{v:prevVer,at:this.now(),by:ex.requester,items:ex.items,sub:ex.sub,vat:ex.vat,total:ex.total,reason:ex.reason}]);
+      this.persistPr(Object.assign({},ex,{items:draft.items,sub:s2,vat:v2,total:s2+v2,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,committee:(draft.committee||[]).filter(c=>c&&c.trim()),tel:draft.tel,neededDate:draft.neededDate,ver:prevVer+1,versions,status:'ยื่นเสนอซื้อ',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและส่งใบขอซื้อใหม่ (เวอร์ชัน '+(prevVer+1)+')',by:draft.requester,at:this.now(),note:'แก้ไขตามที่พัสดุแจ้ง — เก็บฉบับเดิมเป็นเวอร์ชัน '+prevVer}])})); }
       this.setState({prDraft:null,page:'my-requests',sel:draft.editId,selType:'pr'}); this.toastMsg('แก้ไขและส่งใบขอซื้อ '+draft.editId+' ใหม่แล้ว'); return; }
     const id='PR-'+this.ymCode()+'-'+String(1000+(this.state.pr||[]).length+1).slice(1);
     const inc=draft.vatMode==='incl'; const lt=it=>it.vat?(inc?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0;
@@ -727,8 +724,8 @@ class Component extends DCLogic {
     const committee=(draft.committee||[]).filter(c=>c&&c.trim());
     const pr={kind:'pr',id,brId:draft.brId,requester:draft.requester,dept:draft.dept,dn:draft.dn,tel:draft.tel,pos:draft.pos,
       items:draft.items,sub,vat,total:sub+vat,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,
-      committee,condition:'',po:'',vendor:'',docs:[],status:'ยื่นเสนอซื้อ',at:this.D.meta.today,neededDate:draft.neededDate,budgetCode:draft.budgetCode||'',gd:0,ap:0,paid:0,grl:[],
-      log:[{s:'Copy to PR — สร้างใบขอซื้อ',by:draft.requester,at:this.now()}]};
+      committee,condition:'',po:'',vendor:'',docs:[],status:'ยื่นเสนอซื้อ',at:this.D.meta.today,neededDate:draft.neededDate,budgetCode:draft.budgetCode||'',gd:0,ap:0,paid:0,grl:[],ver:1,
+      log:[{s:draft.brId?('Copy to PR — สร้างใบขอซื้อจาก '+draft.brId):'สร้างใบขอซื้อ (เริ่มกระบวนการที่ PR)',by:draft.requester,at:this.now()}]};
     this.insertPr(pr); if(draft.brId){ const b=this.brById(draft.brId); if(b) this.persistBr(Object.assign({},b,{prId:id})); }
     this.setState({prDraft:null,page:'my-requests',sel:id,selType:'pr'}); this.toastMsg('สร้างใบขอซื้อ '+id+' และส่งงานพัสดุแล้ว'); }
   // ส่งคำขออนุมัติจัดสรรงบ (BR) จากฟอร์มที่คีย์เอง
@@ -1032,7 +1029,7 @@ class Component extends DCLogic {
     (this.D.ap||[]).forEach(r=>{ const k=ym(r.post); if(!k)return; (m[k]=m[k]||{m:k,po:0,ap:0,pay:0}).ap++; });
     (this.D.pay||[]).forEach(r=>{ const k=ym(r.post); if(!k)return; (m[k]=m[k]||{m:k,po:0,ap:0,pay:0}).pay++; });
     return Object.values(m).sort((a,b)=>a.m<b.m?-1:1).slice(-16); }
-  prefixLabel(k){ const m={POH:'POH · เวชภัณฑ์ยา',POM:'POM · วัสดุการแพทย์',POS:'POS · สำนักงาน',POO:'POO · จ้าง/บริการ',POC:'POC · ครุภัณฑ์',POD:'POD · อื่นๆ'}; return m[k]||k; }
+  prefixLabel(k){ const m={POC:'POC · Consignment',POH:'POH · ยา',POM:'POM · เวชภัณฑ์',POD:'POD · ครุภัณฑ์',POS:'POS · สำนักงาน',POO:'POO · จ้างเหมาบริการ'}; return m[k]||k; }
   poStatusOf(r){ return r.paid>0?{t:'จ่ายเงินแล้ว',c:this.GREEN,bg:this.GREENBG}:r.ap>0?{t:'ตั้งหนี้แล้ว',c:this.TEAL,bg:'#dcefea'}:r.gd>0?{t:'รับของแล้ว',c:this.BLUE,bg:this.BLUEBG}:{t:'รอรับของ',c:this.AMBER,bg:this.AMBERBG}; }
   // ตารางติดตาม PO เต็มรูปแบบ — ค้นหา + กรองชุดเอกสาร/สถานะ/หน่วยงาน + คลิกดูความสัมพันธ์
   procureTable(po){ const h=React.createElement; const R=this.R;
@@ -1265,15 +1262,23 @@ class Component extends DCLogic {
         h('span',{style:{position:'absolute',left:10,top:9,color:this.MUTE}},'⌕')),
       h('select',{value:this.state.reqFilter,onChange:e=>this.setState({reqFilter:e.target.value}),style:{padding:'9px 11px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:12.5,color:this.INK,background:'#fff',cursor:'pointer'}},
         filters.map(f=>h('option',{key:f[0],value:f[0]},f[1]))),
+      h('div',{style:{display:'flex',alignItems:'center',gap:6}},
+        h('span',{style:{fontSize:11.5,color:this.MUTE}},'ช่วงวันที่'),
+        h('input',{type:'date',value:this.state.reqFrom||'',onChange:e=>this.setState({reqFrom:e.target.value}),style:{padding:'8px 9px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:12,outline:'none',color:this.INK,fontFamily:'inherit'}}),
+        h('span',{style:{fontSize:11.5,color:this.MUTE}},'–'),
+        h('input',{type:'date',value:this.state.reqTo||'',onChange:e=>this.setState({reqTo:e.target.value}),style:{padding:'8px 9px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:12,outline:'none',color:this.INK,fontFamily:'inherit'}}),
+        (this.state.reqFrom||this.state.reqTo)? h('span',{onClick:()=>this.setState({reqFrom:'',reqTo:''}),style:{cursor:'pointer',color:this.MUTE,fontSize:13,padding:'0 4px'}},'✕'):null),
       h('div',{style:{flex:1}}),
       h('div',{style:{display:'flex',gap:4,border:'1px solid '+this.LINE,borderRadius:9,padding:3,background:'#fff'}},
         views.map(v=>{ const on=this.state.reqView===v[0]; return h('div',{key:v[0],onClick:()=>this.setState({reqView:v[0]}),title:v[2],style:{cursor:'pointer',padding:'6px 12px',borderRadius:7,fontSize:13,fontWeight:on?600:400,background:on?this.TEAL:'transparent',color:on?'#fff':this.MUTE,display:'flex',alignItems:'center',gap:5}},h('span',null,v[1]),R.isMobile?null:h('span',{style:{fontSize:11.5}},v[2])); }))); }
   applyReqFilter(all){ const q=(this.state.reqQ||'').trim().toLowerCase(); const f=this.state.reqFilter;
+    const from=this.state.reqFrom?new Date(this.state.reqFrom):null; const to=this.state.reqTo?new Date(this.state.reqTo):null; if(to)to.setHours(23,59,59);
     return all.filter(rec=>{ const br=rec.kind==='br';
       if(f==='br'&&!br) return false; if(f==='pr'&&br) return false;
       const st=rec.status; const doneSt=['จ่ายเงินแล้ว','จัดสรรงบแล้ว'];
       if(f==='done'&&!doneSt.includes(st)&&!(br&&rec.prId)) return false;
       if(f==='active'&&(doneSt.includes(st)||st==='ไม่อนุมัติ'||st==='ตีกลับ')) return false;
+      if(from||to){ const d=this.parseThai(rec.at); if(d){ if(from&&d<from)return false; if(to&&d>to)return false; } }
       if(q){ const nm=(br?rec.itemName:(rec.items&&rec.items[0]&&rec.items[0].d)||'').toLowerCase(); if((rec.id||'').toLowerCase().indexOf(q)<0 && nm.indexOf(q)<0) return false; }
       return true; }); }
   reqGrid(list){ const h=React.createElement; const R=this.R;
@@ -1413,20 +1418,31 @@ class Component extends DCLogic {
       ],4),
       list.length? h('div',{style:{display:'flex',flexDirection:'column',gap:14}}, list.map(p=>this.prQueueCard(p))) : this.card(this.emptyBox('\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e02\u0e2d\u0e0b\u0e37\u0e49\u0e2d\u0e23\u0e2d\u0e23\u0e31\u0e1a\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07 \u2713')));
   }
-  prQueueCard(p){ const h=React.createElement; const R=this.R; const conds=['\u0e44\u0e21\u0e48\u0e40\u0e01\u0e34\u0e19 500,000 \u2192 \u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23 SAP','\u0e40\u0e01\u0e34\u0e19 500,000 \u2192 SAP & EGP','\u0e40\u0e04\u0e23\u0e37\u0e48\u0e2d\u0e07\u0e21\u0e37\u0e2d\u0e41\u0e1e\u0e17\u0e22\u0e4c \u2192 \u0e2a\u0e48\u0e07\u0e15\u0e23\u0e27\u0e08\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23'];
+  prQueueCard(p){ const h=React.createElement; const R=this.R; const conds=['ไม่เกิน 500,000 → ดำเนินการ SAP','เกิน 500,000 → SAP & EGP','เครื่องมือแพทย์ → ส่งตรวจเอกสาร'];
     const auto = p.total>500000? conds[1] : conds[0];
-    return this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
+    const sel=(this.state.queueCond||{})[p.id]||auto;
+    const back=this.state.sendBackId===p.id;
+    const stop=e=>e.stopPropagation();
+    return this.card(h('div',{onClick:()=>this.setState({sel:p.id,selType:'pr'}),style:{padding:R.isMobile?'16px':'18px 20px',cursor:'pointer'}},
       h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:14,flexWrap:'wrap',marginBottom:13}},
         h('div',{style:{minWidth:0}},
-          h('div',{style:{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap',marginBottom:5}},h('span',{style:{fontSize:9.5,fontWeight:700,color:'#fff',background:this.GREEN,padding:'2px 6px',borderRadius:5}},'PR'),h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,fontSize:15}},p.id),h('span',{style:{fontSize:11,color:this.MUTE}},'\u0e08\u0e32\u0e01 '+p.brId)),
-          h('div',{style:{fontSize:13}},p.items[0].d),
-          h('div',{style:{fontSize:12,color:this.MUTE,marginTop:2}},p.dn+' \u00b7 '+p.requester)),
-        h('div',{style:{textAlign:'right'}},h('div',{style:{fontSize:11,color:this.MUTE}},'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e23\u0e27\u0e21'),h('div',{style:{fontSize:20,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(p.total)))),
-      h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:8}},'\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e40\u0e07\u0e37\u0e48\u0e2d\u0e19\u0e44\u0e02\u0e01\u0e32\u0e23\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23 (\u0e41\u0e19\u0e30\u0e19\u0e33: ',h('b',{style:{color:this.INK}},auto),')'),
-      h('textarea',{value:(this.state.recvNotes||{})[p.id]||'',onChange:e=>{const v=e.target.value;this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[p.id]:v})}));},placeholder:'ความเห็น/หมายเหตุถึงผู้ขอ (แสดงในไทม์ไลน์)',rows:2,style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'8px 11px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit',marginBottom:10}}),
-      h('div',{style:{display:'flex',gap:9,flexWrap:'wrap'}},
-        conds.map((c,i)=>h('button',{key:i,onClick:()=>this.askConfirm('ยืนยันรับเรื่องใบขอซื้อ '+p.id+' เพื่อดำเนินการจัดซื้อ?',()=>this.prReceive(p.id,c),'รับเรื่อง'),style:{flex:R.isMobile?'1 1 100%':'1',minWidth:150,padding:'11px 12px',borderRadius:10,border:'1.5px solid '+(c===auto?this.TEAL:this.LINE),background:c===auto?'#f0f8f6':'#fff',color:this.INK,fontSize:12,cursor:'pointer',fontWeight:c===auto?600:400,textAlign:'left'}},c))),
-      h('button',{onClick:()=>{const nt=((this.state.recvNotes||{})[p.id]||'').trim(); if(!nt){this.toastMsg('กรุณากรอกคำอธิบายที่ต้องการให้ผู้ขอแก้ไขก่อน');return;} this.askConfirm('ส่งใบขอซื้อ '+p.id+' กลับให้ผู้ขอแก้ไข?',()=>this.prReturnEdit(p.id),'ส่งกลับแก้ไข');},style:{marginTop:10,width:'100%',padding:'11px 12px',borderRadius:10,border:'1.5px solid '+this.AMBER,background:this.AMBERBG,color:this.AMBER,fontSize:12.5,cursor:'pointer',fontWeight:600}},'↩ ส่งกลับให้ผู้ขอแก้ไข (พร้อมคำอธิบายด้านบน)')));
+          h('div',{style:{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap',marginBottom:5}},h('span',{style:{fontSize:9.5,fontWeight:700,color:'#fff',background:this.GREEN,padding:'2px 6px',borderRadius:5}},'PR'),h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:700,fontSize:15}},p.id),p.brId?h('span',{style:{fontSize:11,color:this.MUTE}},'จาก '+p.brId):null,h('span',{style:{fontSize:10.5,color:this.TEAL,fontWeight:600}},'· คลิกเพื่อดูรายละเอียด')),
+          h('div',{style:{fontSize:13}},(p.items&&p.items[0]&&p.items[0].d)||'—',(p.items&&p.items.length>1)?h('span',{style:{color:this.MUTE}},' +'+(p.items.length-1)+' รายการ'):null),
+          h('div',{style:{fontSize:12,color:this.MUTE,marginTop:2}},p.dn+' · '+p.requester)),
+        h('div',{style:{textAlign:'right'}},h('div',{style:{fontSize:11,color:this.MUTE}},'มูลค่ารวม'),h('div',{style:{fontSize:20,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(p.total)))),
+      h('div',{onClick:stop,style:{cursor:'default',display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}},
+        h('div',{style:{flex:'1 1 260px',minWidth:0}},
+          h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:6}},'เงื่อนไขการดำเนินการจัดซื้อ'),
+          h('select',{value:sel,onChange:e=>{const v=e.target.value;this.setState(s=>({queueCond:Object.assign({},s.queueCond,{[p.id]:v})}));},style:{width:'100%',padding:'11px 12px',border:'1.5px solid '+this.LINE,borderRadius:10,fontSize:13,outline:'none',background:'#fff',color:this.INK,fontFamily:'inherit',cursor:'pointer'}},
+            conds.map((c,i)=>h('option',{key:i,value:c},c)))),
+        h('button',{onClick:()=>this.askConfirm('ยืนยันรับเรื่องใบขอซื้อ '+p.id+' (เงื่อนไข: '+sel+')?',()=>this.prReceive(p.id,sel),'รับเรื่อง'),style:{flex:'0 0 auto',padding:'12px 22px',borderRadius:10,border:'none',background:this.TEAL,color:'#fff',fontSize:13,cursor:'pointer',fontWeight:600}},'✓ รับเรื่อง'),
+        h('button',{onClick:()=>this.setState({sendBackId:back?null:p.id}),style:{flex:'0 0 auto',padding:'12px 18px',borderRadius:10,border:'1.5px solid '+this.AMBER,background:back?this.AMBER:this.AMBERBG,color:back?'#fff':this.AMBER,fontSize:13,cursor:'pointer',fontWeight:600}},'↩ ส่งกลับแก้ไข')),
+      back? h('div',{onClick:stop,style:{cursor:'default',marginTop:12,padding:14,background:this.AMBERBG,borderRadius:10,border:'1px solid '+this.AMBER}},
+        h('div',{style:{fontSize:12.5,fontWeight:600,color:this.AMBER,marginBottom:8}},'คำอธิบายที่ต้องการให้ผู้ขอแก้ไข'),
+        h('textarea',{value:(this.state.recvNotes||{})[p.id]||'',onChange:e=>{const v=e.target.value;this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[p.id]:v})}));},placeholder:'ระบุสิ่งที่ต้องแก้ไข…',rows:3,autoFocus:true,style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'9px 11px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit'}}),
+        h('div',{style:{display:'flex',gap:9,justifyContent:'flex-end',marginTop:10}},
+          h('button',{onClick:()=>this.setState({sendBackId:null}),style:{padding:'9px 18px',borderRadius:9,border:'1px solid '+this.LINE,background:'#fff',color:this.INK,fontSize:12.5,cursor:'pointer'}},'ยกเลิก'),
+          h('button',{onClick:()=>{const nt=((this.state.recvNotes||{})[p.id]||'').trim(); if(!nt){this.toastMsg('กรุณากรอกคำอธิบายก่อนส่งกลับ');return;} this.askConfirm('ส่งใบขอซื้อ '+p.id+' กลับให้ผู้ขอแก้ไข?',()=>{this.prReturnEdit(p.id);this.setState({sendBackId:null});},'ส่งกลับแก้ไข');},style:{padding:'9px 20px',borderRadius:9,border:'none',background:this.AMBER,color:'#fff',fontSize:12.5,cursor:'pointer',fontWeight:600}},'ส่งกลับให้ผู้ขอแก้ไข'))) : null));
   }
 
   pgPoVerify(){
@@ -1772,6 +1788,13 @@ class Component extends DCLogic {
       h('div',{style:{background:this.PANEL,borderRadius:12,padding:'16px 18px',marginBottom:18}},
         h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',letterSpacing:.5,marginBottom:14}},'\u0e2a\u0e16\u0e32\u0e19\u0e30\u0e01\u0e32\u0e23\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e07\u0e32\u0e19 (BR \u2192 PR)'),
         this.unifiedTimeline(rec)),
+      (rec.versions&&rec.versions.length)? h('div',{style:{background:'#fff',border:'1px solid '+this.LINE,borderRadius:12,padding:'16px 18px',marginBottom:18}},
+        h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',letterSpacing:.5,marginBottom:12}},'ประวัติการแก้ไขเอกสาร ('+(rec.versions.length+1)+' เวอร์ชัน)'),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+          rec.versions.concat([{v:rec.ver||1,at:'ปัจจุบัน',total:rec.total,current:true}]).map((vv,i)=>h('div',{key:i,style:{display:'flex',alignItems:'center',gap:12,padding:'9px 12px',borderRadius:9,background:vv.current?this.BLUEBG:this.PANEL,border:vv.current?'1px solid '+this.BLUE:'1px solid transparent'}},
+            h('span',{style:{fontSize:11,fontWeight:700,color:'#fff',background:vv.current?this.BLUE:this.MUTE,padding:'3px 9px',borderRadius:6,whiteSpace:'nowrap'}},'v'+vv.v),
+            h('div',{style:{flex:1,minWidth:0}},h('div',{style:{fontSize:12.5,fontWeight:vv.current?600:400}},vv.current?'เวอร์ชันล่าสุด (ใช้งานอยู่)':'ฉบับแก้ไขครั้งที่ '+vv.v),h('div',{style:{fontSize:11,color:this.MUTE}},vv.at)),
+            h('div',{style:{fontSize:12.5,fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.baht(vv.total)))))) : null,
       h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr 1fr':'repeat(4,1fr)',gap:14,marginBottom:18}},
         info('\u0e2b\u0e21\u0e27\u0e14\u0e07\u0e1a',rec.cat),info('\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25',rec.reason),info('\u0e23\u0e2b\u0e31\u0e2a\u0e1e\u0e31\u0e2a\u0e14\u0e38',rec.code||'\u2014'),info(br?'\u0e40\u0e25\u0e02 PR':'\u0e40\u0e25\u0e02 PO',br?(rec.prId||'\u2014'):(rec.po||'\u2014'))),
       h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',letterSpacing:.5,marginBottom:10}},'\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23'),
@@ -1787,6 +1810,9 @@ class Component extends DCLogic {
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:8}}, docs.map((d,i)=>h('span',{key:i,style:{display:'flex',alignItems:'center',gap:7,padding:'7px 12px',borderRadius:9,background:this.BLUEBG,fontSize:12,color:'#215c96'}},h('span',null,'\uD83D\uDCCE'),d)))):null);
     const btns=[];
     btns.push(h('button',{key:'doc',onClick:()=>this.setState({docModal:rec.id,docType:rec.kind}),style:{padding:'10px 16px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',color:this.INK}},'\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23 '+(rec.kind==='br'?'BR':'PR')));
+    if(!br && rec.brId && this.brById(rec.brId)){
+      btns.push(h('button',{key:'vbr',onClick:()=>this.setState({docModal:rec.brId,docType:'br'}),style:{padding:'10px 16px',border:'1px solid '+this.BLUE,background:this.BLUEBG,borderRadius:9,fontSize:13,cursor:'pointer',color:this.BLUE,fontWeight:600}},'\u0e14\u0e39\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23 BR \u0e15\u0e49\u0e19\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07 ('+rec.brId+')'));
+    }
     if(br && (this.state.role==='exec'||this.state.role==='budget'||this.state.role==='admin') && rec.status==='\u0e23\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e1c\u0e39\u0e49\u0e1a\u0e23\u0e34\u0e2b\u0e32\u0e23'){
       btns.push(h('button',{key:'rej',onClick:()=>this.brReject(rec.id),style:{padding:'10px 16px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:13,color:this.RED,cursor:'pointer',fontWeight:600}},'\u0e44\u0e21\u0e48\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34'));
       btns.push(h('button',{key:'ap',onClick:()=>this.setState({approveModal:rec.id,sel:null}),style:{padding:'10px 20px',border:'none',background:this.BLUE,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e43\u0e19\u0e2b\u0e25\u0e31\u0e01\u0e01\u0e32\u0e23'));
@@ -2393,8 +2419,12 @@ class Component extends DCLogic {
               h('div',{style:{borderBottom:'1px dotted #333',height:30,margin:'2px 10px 6px'}}),
               h('div',{style:{fontSize:12}},'( ',h('span',{style:{fontWeight:sg[1]?600:400}},sg[1]||'                    '),' )'),
               h('div',{style:{fontSize:11.5,color:this.MUTE,marginTop:3}},sg[0]),
-              h('div',{style:{fontSize:11,color:this.MUTE,marginTop:2}},'ตำแหน่ง '+(i===0&&sg[1]?(rec.pos||'.................'):'.................')))))) ));
+              h('div',{style:{fontSize:11,color:this.MUTE,marginTop:2}},'ตำแหน่ง '+(i===0&&sg[1]?(rec.pos||'.................'):'.................')))),
+          h('div',{style:{marginTop:18,paddingTop:10,borderTop:'1px dotted #bbb',display:'flex',justifyContent:'space-between',fontSize:10.5,color:this.MUTE}},
+            h('span',null,'เอกสารเลขที่ '+rec.id),
+            h('span',null,'พิมพ์เมื่อ '+this.printStamp()))))));
   }
+  printStamp(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+(d.getFullYear()+543)+' '+p(d.getHours())+':'+p(d.getMinutes())+' น.'; }
   printDoc(){
     try{
       const node=document.getElementById('printDoc'); if(!node){ window.print(); return; }
