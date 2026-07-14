@@ -50,7 +50,7 @@ class Component extends DCLogic {
     sel:null, selType:null, roleMenu:false, toast:'',
     poTab:'all', poQ:'', poDept:'', poPage:0,
     payTab:'unpaid', payPage:0,
-    regTab:'all', regQ:'', reqView:'list', reqQ:'', reqFilter:'all',
+    regTab:'all', regQ:'', reqView:'list', reqQ:'', reqFilter:'all', rptType:'br', rptFrom:'', rptTo:'',
     approveModal:null, brOverrides:{}, prOverrides:{}, prPO:{}, newPrs:[],
     brCreatedFlash:false, prCreatedFlash:false,
     poBindModal:null, poBindInput:'', poDocs:[],
@@ -120,7 +120,7 @@ class Component extends DCLogic {
       {key:'br-create',label:'ขออนุมัติจัดสรรงบ',icon:'＋',roles:['requester']},
       {key:'my-requests',label:'คำขอของฉัน',icon:'◷',roles:['requester']},
       {key:'pr-create',label:'สร้างใบขอซื้อ',icon:'▤',roles:['requester']},
-      {key:'br-approval',label:'อนุมัติจัดสรรงบ',icon:'✓',roles:['exec'],badge:'brApprove'},
+      {key:'br-approval',label:'อนุมัติจัดสรรงบ',icon:'✓',roles:['exec','budget'],badge:'brApprove'},
       {key:'br-allocate',label:'จัดสรรงบประมาณ',icon:'฿',roles:['budget'],badge:'brAllocate'},
       {key:'item-pro',label:'เชื่อมต่อ Item Pro',icon:'⇄',roles:['budget']},
       {key:'pr-queue',label:'คิวรับเรื่องซื้อ',icon:'☰',roles:['procurement'],badge:'prQueue'},
@@ -253,7 +253,7 @@ class Component extends DCLogic {
   shell(content){
     const h=React.createElement; const R=this.R;
     if(R.isMobile) return h('div',{style:{minHeight:'100vh',background:this.BG}},
-      this.topbar(), h('div',{style:{padding:'14px 13px 90px'}}, content),
+      this.topbar(), h('div',{style:{padding:'14px 13px 90px'}}, this.nextStepBanner(), content),
       this.state.drawer? this.drawer():null, this.mobileNav(),
       this.state.sel? this.detailModal():null, this.state.approveModal? this.approveSheet():null,
       this.state.poBindModal? this.poBindSheet():null, this.extraModals(),
@@ -262,7 +262,7 @@ class Component extends DCLogic {
       this.sidebar(),
       h('div',{style:{flex:1,minWidth:0,display:'flex',flexDirection:'column'}},
         this.topbar(),
-        h('div',{style:{flex:1,padding:R.isTablet?'20px 22px 60px':'26px 34px 70px',maxWidth:1440,width:'100%',margin:'0 auto'}}, content)),
+        h('div',{style:{flex:1,padding:R.isTablet?'20px 22px 60px':'26px 34px 70px',maxWidth:1440,width:'100%',margin:'0 auto'}}, this.nextStepBanner(), content)),
       this.state.sel? this.detailModal():null, this.state.approveModal? this.approveSheet():null,
       this.state.poBindModal? this.poBindSheet():null, this.extraModals(),
       this.state.roleMenu? this.roleSheet():null, this.state.notifOpen? this.notifPanel():null, this.state.confirm? this.confirmModal():null, this.state.toast? this.toastEl():null);
@@ -479,6 +479,24 @@ class Component extends DCLogic {
       h('span',{style:{display:'inline-block',animation:busy?'spin .7s linear infinite':'none'}},'⟳')); }
   refreshAll(){ this.setState({refreshing:true}); this.loadDb(); if(this.state.online) this.syncItemPro(true); this.forceUpdate&&this.forceUpdate();
     this.toastMsg('รีเฟรชข้อมูลแล้ว'); setTimeout(()=>this.setState({refreshing:false}),700); }
+  nextStepTasks(){ const r=this.state.role; const out=[];
+    if(r==='requester'||r==='admin'){
+      const sb=this.brs().filter(b=>b.status==='ส่งกลับแก้ไข'); if(sb.length) out.push({n:sb.length,txt:sb.length+' คำขอถูกส่งกลับให้แก้ไข',page:'my-requests',c:this.AMBER});
+      const cp=this.brs().filter(b=>b.status==='จัดสรรงบแล้ว'&&!b.prId); if(cp.length) out.push({n:cp.length,txt:cp.length+' คำขอผ่านงบแล้ว — พร้อม Copy to PR',page:'my-requests',c:this.TEAL});
+    }
+    if(r==='exec'||r==='budget'||r==='admin'){ const n=this.badgeCount('brApprove'); if(n) out.push({n,txt:n+' คำขอรออนุมัติจัดสรรงบ',page:'br-approval',c:this.BLUE}); }
+    if(r==='budget'||r==='admin'){ const n=this.badgeCount('brAllocate'); if(n) out.push({n,txt:n+' คำขอรอจัดสรรงบ/ออกรหัสพัสดุ',page:'br-allocate',c:this.PUR}); }
+    if(r==='procurement'||r==='admin'){ const n=this.badgeCount('prQueue'); if(n) out.push({n,txt:n+' ใบขอซื้อรอพัสดุรับเรื่อง',page:'pr-queue',c:this.PUR});
+      const nv=this.prs().filter(p=>['พัสดุรับเรื่อง','กำลังดำเนินการจัดซื้อ'].includes(p.status)&&!p.po).length; if(nv) out.push({n:nv,txt:nv+' ใบรับเรื่องแล้ว — รอกรอกเลข PO',page:'po-verify',c:this.AMBER}); }
+    if(r==='finance'||r==='admin'){ const n=(this.D.ap||[]).filter(a=>!a.paid).length; if(n) out.push({n,txt:this.fmtN(n)+' ใบตั้งหนี้ค้างจ่าย',page:'pay-track',c:this.RED}); }
+    return out; }
+  nextStepBanner(){ const h=React.createElement; const R=this.R; const tasks=this.nextStepTasks(); if(!tasks.length) return null;
+    return h('div',{style:{display:'flex',flexDirection:'column',gap:8,marginBottom:16}},
+      tasks.map((t,i)=>h('div',{key:i,onClick:()=>this.go(t.page),style:{cursor:'pointer',display:'flex',alignItems:'center',gap:12,padding:R.isMobile?'11px 13px':'12px 16px',background:'#fff',border:'1px solid '+this.LINE,borderLeft:'4px solid '+t.c,borderRadius:11,boxShadow:'0 1px 2px rgba(15,30,26,.04)'}},
+        h('span',{style:{width:26,height:26,borderRadius:'50%',background:t.c,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12.5,fontWeight:700,flexShrink:0,fontFamily:"'IBM Plex Mono',monospace"}},t.n>99?'99+':t.n),
+        h('span',{style:{fontSize:13,fontWeight:600,color:this.INK,flex:1,minWidth:0}},'ดำเนินการต่อ: ',h('span',{style:{fontWeight:500,color:this.MUTE}},t.txt)),
+        h('span',{style:{fontSize:12,color:t.c,fontWeight:600,whiteSpace:'nowrap'}},'ไปที่หน้า →'))));
+  }
   notifBell(){ const h=React.createElement; const due=this.myDue(); const n=due.length; const urgent=due.filter(x=>x.dl<=3).length;
     return h('div',{onClick:(e)=>{e.stopPropagation&&e.stopPropagation();this.setState({notifOpen:!this.state.notifOpen});},title:'แจ้งเตือนกำหนดทำ PR',
       style:{position:'relative',width:38,height:38,borderRadius:'50%',border:'1px solid '+this.LINE,background:this.state.notifOpen?this.PANEL:'#fff',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}},
@@ -641,9 +659,9 @@ class Component extends DCLogic {
   // prog for unified timeline
   progOf(rec){ const m=this.statusMap(rec)||{}; return { prog:m.prog||0, reject:!!m.reject, c:m.c||this.MUTE, bg:m.bg||'#eef2f1' }; }
   // BR actions (persist to Supabase)
-  brApprove(id){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'รอจัดสรรงบ',log:(b.log||[]).concat([{s:'ผู้บริหารพิจารณา',by:this.role().user.name,at:this.now(),note:'อนุมัติในหลักการ'}])})); this.setState({approveModal:null,sel:null}); this.toastMsg('อนุมัติงบในหลักการ · ส่งงานงบประมาณจัดสรร'); }
-  brReject(id){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'ไม่อนุมัติ',log:(b.log||[]).concat([{s:'ผู้บริหารพิจารณา',by:this.role().user.name,at:this.now(),note:'ไม่อนุมัติงบรอบนี้',reject:true}])})); this.setState({approveModal:null,sel:null}); this.toastMsg('ไม่อนุมัติคำขอ · แจ้งผู้ขอแล้ว'); }
-  brSendBack(id){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'ส่งกลับแก้ไข',log:(b.log||[]).concat([{s:'ผู้บริหารพิจารณา',by:this.role().user.name,at:this.now(),note:'ส่งกลับให้ผู้ขอแก้ไขรายละเอียด',revise:true}])})); this.setState({approveModal:null,sel:null}); this.toastMsg('ส่งกลับให้ผู้ขอแก้ไขแล้ว'); }
+  brApprove(id){ const b=this.brById(id); if(!b)return; const note=(this.state.actionNote||'').trim()||'อนุมัติในหลักการ'; const step=this.state.role==='budget'?'เจ้าหน้าที่งบประมาณพิจารณา (แทนผู้บริหาร)':'ผู้บริหารพิจารณา'; this.persistBr(Object.assign({},b,{status:'รอจัดสรรงบ',log:(b.log||[]).concat([{s:step,by:this.role().user.name,at:this.now(),note}])})); this.setState({approveModal:null,sel:null,actionNote:''}); this.toastMsg('อนุมัติงบในหลักการ · ส่งงานงบประมาณจัดสรร'); }
+  brReject(id){ const b=this.brById(id); if(!b)return; const note=(this.state.actionNote||'').trim()||'ไม่อนุมัติงบรอบนี้'; const step=this.state.role==='budget'?'เจ้าหน้าที่งบประมาณพิจารณา (แทนผู้บริหาร)':'ผู้บริหารพิจารณา'; this.persistBr(Object.assign({},b,{status:'ไม่อนุมัติ',log:(b.log||[]).concat([{s:step,by:this.role().user.name,at:this.now(),note,reject:true}])})); this.setState({approveModal:null,sel:null,actionNote:''}); this.toastMsg('ไม่อนุมัติคำขอ · แจ้งผู้ขอแล้ว'); }
+  brSendBack(id){ const b=this.brById(id); if(!b)return; const note=(this.state.actionNote||'').trim()||'ส่งกลับให้ผู้ขอแก้ไขรายละเอียด'; const step=this.state.role==='budget'?'เจ้าหน้าที่งบประมาณพิจารณา (แทนผู้บริหาร)':'ผู้บริหารพิจารณา'; this.persistBr(Object.assign({},b,{status:'ส่งกลับแก้ไข',log:(b.log||[]).concat([{s:step,by:this.role().user.name,at:this.now(),note,revise:true}])})); this.setState({approveModal:null,sel:null,actionNote:''}); this.toastMsg('ส่งกลับให้ผู้ขอแก้ไขแล้ว'); }
   brResubmit(id){ const b=this.brById(id); if(!b)return;
     const items=(b.items&&b.items.length)? b.items.slice() : [{d:b.itemName,c:b.code||'',u:b.unit,qty:b.qty,price:Math.round(b.value/(b.qty||1)),total:b.value}];
     const draft={editId:b.id,requester:b.requester,dept:b.dept,dn:b.dn,tel:b.tel||'',pos:b.pos,reason:b.reason,cat:b.cat,budgetPlan:b.budgetPlan||this.sapPlans()[0],procType:b.procType||'ซื้อ',neededDate:b.neededDate,budgetType:b.budgetType||'งบดำเนินการ',budgetName:b.budgetName,budgetCode:b.budgetCode||'',items,docs:b.docs||[]};
@@ -720,7 +738,7 @@ class Component extends DCLogic {
     const nb={kind:'br',id,at:this.now(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
     this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
   // พัสดุรับเรื่อง (เลือกเงื่อนไข)
-  prReceive(id,cond){ const p=(this.state.pr||[]).find(x=>x.id===id); if(!p)return; this.persistPr(Object.assign({},p,{status:'พัสดุรับเรื่อง',condition:cond,log:(p.log||[]).concat([{s:'พัสดุรับเรื่อง',by:this.role().user.name,at:this.now(),note:cond}])})); this.toastMsg('รับเรื่องแล้ว · เงื่อนไข: '+cond); }
+  prReceive(id,cond){ const p=(this.state.pr||[]).find(x=>x.id===id); if(!p)return; const note=((this.state.recvNotes||{})[id]||'').trim(); const detail=note?(cond+' — '+note):cond; this.persistPr(Object.assign({},p,{status:'พัสดุรับเรื่อง',condition:cond,log:(p.log||[]).concat([{s:'พัสดุรับเรื่อง',by:this.role().user.name,at:this.now(),note:detail}])})); this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[id]:''})})); this.toastMsg('รับเรื่องแล้ว · เงื่อนไข: '+cond); }
   // ตรวจสอบเอกสาร PO — กรอกเลข PO + อัปโหลด → ดึง SAP เดินไทม์ไลน์ต่อ
   openBindPo(id){ this.setState({poBindModal:id, poBindInput:this.suggestPo(this.prById(id)), poDocs:[], sel:null}); }
   suggestPo(pr){ return (pr&&pr.po)||''; }
@@ -1355,11 +1373,12 @@ class Component extends DCLogic {
       h('div',{style:{background:this.PANEL,borderRadius:11,padding:'12px 15px',marginBottom:13,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}},
         h('div',{style:{flex:1,minWidth:180}},h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'\u0e23\u0e2b\u0e31\u0e2a\u0e1e\u0e31\u0e2a\u0e14\u0e38 (Item Master Pro)'),
           h('div',{style:{fontSize:14,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",color:b.hasCode?this.TEAL:this.AMBER}},b.hasCode?b.code:(sent?'\u0e23\u0e2d Item Pro \u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a\u2026':'\u2014 \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e2b\u0e31\u0e2a'))),
-        h('div',{style:{flex:1,minWidth:180}},h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'\u0e07\u0e1a\u0e17\u0e35\u0e48\u0e08\u0e30\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23'),h('div',{style:{fontSize:13,fontWeight:600}},b.budgetName))),
+        h('div',{style:{flex:1,minWidth:180}},h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'\u0e07\u0e1a\u0e17\u0e35\u0e48\u0e08\u0e30\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23'),h('div',{style:{fontSize:13,fontWeight:600}},b.budgetName)),
+        (function(){ const rm=this.budgetRemain(b.budgetCode); if(!rm) return null; const net=rm.net; const okB=net>=b.value; return h('div',{style:{flex:1,minWidth:180}},h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'\u0e07\u0e1a\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d (Available)'),h('div',{style:{fontSize:14,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",color:okB?this.GREEN:this.RED}},this.baht(net)),h('div',{style:{fontSize:10.5,color:okB?this.GREEN:this.RED,marginTop:2}},okB?('\u2713 \u0e40\u0e1e\u0e35\u0e22\u0e07\u0e1e\u0e2d\u0e15\u0e31\u0e14\u0e07\u0e1a '+this.baht(b.value)):'\u26a0 \u0e07\u0e1a\u0e44\u0e21\u0e48\u0e1e\u0e2d ('+this.baht(b.value)+')')); }).call(this)),
       h('div',{style:{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',justifyContent:'flex-end'}},
         h('button',{onClick:()=>this.openRec(b),style:{padding:'9px 15px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',color:this.INK}},'\u0e14\u0e39\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14'),
-        (needCode||sent)? h('button',{onClick:()=>{this.searchItemMaster(b.itemName);this.setState({itemProModal:b.id,itemProQ:b.itemName,itemProResult:null,itemProManual:''});},style:{padding:'9px 16px',border:'none',background:this.AMBER,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e2a\u0e48\u0e07\u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a (Item Pro)'):null,
-        waitAck? h('button',{onClick:()=>{this.searchItemMaster(b.itemName);this.setState({itemProModal:b.id,itemProQ:b.itemName,itemProResult:null,itemProManual:''});},style:{padding:'9px 15px',border:'1px solid '+this.AMBER,background:'#fff',color:this.AMBER,borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e41\u0e01\u0e49\u0e44\u0e02\u0e23\u0e2b\u0e31\u0e2a'):null,
+        (needCode||sent)? h('button',{onClick:()=>{this.searchItemMaster('');this.setState({itemProModal:b.id,itemProQ:'',itemProResult:null,itemProManual:''});},style:{padding:'9px 16px',border:'none',background:this.AMBER,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e2a\u0e48\u0e07\u0e2d\u0e2d\u0e01\u0e23\u0e2b\u0e31\u0e2a (Item Pro)'):null,
+        waitAck? h('button',{onClick:()=>{this.searchItemMaster('');this.setState({itemProModal:b.id,itemProQ:'',itemProResult:null,itemProManual:''});},style:{padding:'9px 15px',border:'1px solid '+this.AMBER,background:'#fff',color:this.AMBER,borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e41\u0e01\u0e49\u0e44\u0e02\u0e23\u0e2b\u0e31\u0e2a'):null,
         waitAck? h('button',{onClick:()=>this.setState({ackModal:b.id}),style:{padding:'9px 18px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e23\u0e31\u0e1a\u0e17\u0e23\u0e32\u0e1a + \u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'):null,
         (b.hasCode&&!waitAck)? h('button',{onClick:()=>this.setState({allocModal:b.id,allocCode:b.code}),style:{padding:'9px 18px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'):null)));
   }
@@ -1385,6 +1404,7 @@ class Component extends DCLogic {
           h('div',{style:{fontSize:12,color:this.MUTE,marginTop:2}},p.dn+' \u00b7 '+p.requester)),
         h('div',{style:{textAlign:'right'}},h('div',{style:{fontSize:11,color:this.MUTE}},'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e23\u0e27\u0e21'),h('div',{style:{fontSize:20,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(p.total)))),
       h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:8}},'\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e40\u0e07\u0e37\u0e48\u0e2d\u0e19\u0e44\u0e02\u0e01\u0e32\u0e23\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23 (\u0e41\u0e19\u0e30\u0e19\u0e33: ',h('b',{style:{color:this.INK}},auto),')'),
+      h('textarea',{value:(this.state.recvNotes||{})[p.id]||'',onChange:e=>{const v=e.target.value;this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[p.id]:v})}));},placeholder:'ความเห็น/หมายเหตุถึงผู้ขอ (แสดงในไทม์ไลน์)',rows:2,style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'8px 11px',fontSize:12.5,outline:'none',resize:'vertical',fontFamily:'inherit',marginBottom:10}}),
       h('div',{style:{display:'flex',gap:9,flexWrap:'wrap'}},
         conds.map((c,i)=>h('button',{key:i,onClick:()=>this.askConfirm('ยืนยันรับเรื่องใบขอซื้อ '+p.id+' เพื่อดำเนินการจัดซื้อ?',()=>this.prReceive(p.id,c),'รับเรื่อง'),style:{flex:R.isMobile?'1 1 100%':'1',minWidth:150,padding:'11px 12px',borderRadius:10,border:'1.5px solid '+(c===auto?this.TEAL:this.LINE),background:c===auto?'#f0f8f6':'#fff',color:this.INK,fontSize:12,cursor:'pointer',fontWeight:c===auto?600:400,textAlign:'left'}},c)))));
   }
@@ -1502,6 +1522,14 @@ class Component extends DCLogic {
     const h=React.createElement; const R=this.R; const prs=this.prs(); const brs=this.brs();
     const exportable=prs.filter(p=>p.po);
     const totVal=prs.reduce((a,b)=>a+b.total,0);
+    // ---- รายงาน BR/PR กรองช่วงวันที่ ----
+    const rt=this.state.rptType||'br'; const fromD=this.state.rptFrom?new Date(this.state.rptFrom):null; const toD=this.state.rptTo?new Date(this.state.rptTo+'T23:59:59'):null;
+    const inRange=(at)=>{ const d=this.parseThai(at); if(!d) return true; if(fromD&&d<fromD)return false; if(toD&&d>toD)return false; return true; };
+    const src=(rt==='br'?brs:prs).filter(x=>inRange(x.at));
+    const rptSum=src.reduce((a,x)=>a+(rt==='br'?(x.value||0):(x.total||0)),0);
+    const dinp=(val,on)=>h('input',{type:'date',value:val,onChange:e=>on(e.target.value),style:{border:'1px solid '+this.LINE,borderRadius:8,padding:'7px 10px',fontSize:12.5,outline:'none',fontFamily:'inherit'}});
+    const tabBtn=(k,lb)=>h('button',{onClick:()=>this.setState({rptType:k}),style:{padding:'7px 15px',borderRadius:8,border:'1px solid '+(rt===k?this.TEAL:this.LINE),background:rt===k?this.TEAL:'#fff',color:rt===k?'#fff':this.INK,fontSize:12.5,fontWeight:rt===k?600:500,cursor:'pointer'}},lb);
+    const exportRpt=()=>this.exportReportCsv(rt,src);
     return h('div',null,
       this.kpiGrid([
         {label:'\u0e04\u0e33\u0e02\u0e2d\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14',val:this.fmtN(brs.length+prs.length),unit:'\u0e09\u0e1a\u0e31\u0e1a',accent:this.TEAL,sub:brs.length+' BR \u00b7 '+prs.length+' PR'},
@@ -1509,6 +1537,29 @@ class Component extends DCLogic {
         {label:'\u0e1e\u0e23\u0e49\u0e2d\u0e21 Export SAP',val:this.fmtN(exportable.length),unit:'\u0e43\u0e1a',accent:this.GREEN,c:this.GREEN},
         {label:'\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e2a\u0e21\u0e1a\u0e39\u0e23\u0e13\u0e4c',val:this.fmtN(this.prCount('\u0e08\u0e48\u0e32\u0e22\u0e40\u0e07\u0e34\u0e19\u0e41\u0e25\u0e49\u0e27')),unit:'\u0e43\u0e1a',accent:this.GREEN}
       ],4),
+      this.card(h('div',null,
+        h('div',{style:{padding:R.isMobile?'14px':'15px 18px',borderBottom:'1px solid '+this.LINE}},
+          h('div',{style:{fontSize:15,fontWeight:700,marginBottom:12}},'\u0e23\u0e32\u0e22\u0e07\u0e32\u0e19\u0e04\u0e33\u0e02\u0e2d\u0e07\u0e1a/\u0e43\u0e1a\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d \u2014 \u0e01\u0e23\u0e2d\u0e07\u0e0a\u0e48\u0e27\u0e07\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48'),
+          h('div',{style:{display:'flex',gap:14,flexWrap:'wrap',alignItems:'flex-end'}},
+            h('div',{style:{display:'flex',gap:8}}, tabBtn('br','\u0e04\u0e33\u0e02\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e07\u0e1a (BR)'), tabBtn('pr','\u0e43\u0e1a\u0e02\u0e2d\u0e0b\u0e37\u0e49\u0e2d (PR)')),
+            h('div',null,h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:4}},'\u0e15\u0e31\u0e49\u0e07\u0e41\u0e15\u0e48\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48'),dinp(this.state.rptFrom,v=>this.setState({rptFrom:v}))),
+            h('div',null,h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:4}},'\u0e16\u0e36\u0e07\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48'),dinp(this.state.rptTo,v=>this.setState({rptTo:v}))),
+            (this.state.rptFrom||this.state.rptTo)? h('button',{onClick:()=>this.setState({rptFrom:'',rptTo:''}),style:{padding:'7px 12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:8,fontSize:12,color:this.MUTE,cursor:'pointer'}},'\u0e25\u0e49\u0e32\u0e07\u0e15\u0e31\u0e27\u0e01\u0e23\u0e2d\u0e07'):null,
+            h('div',{style:{flex:1}}),
+            h('button',{onClick:exportRpt,style:{padding:'8px 15px',border:'none',background:'#0a6b3c',color:'#fff',borderRadius:8,fontSize:12.5,cursor:'pointer',fontWeight:600}},'\u25a4 Export CSV'))),
+        h('div',{style:{padding:R.isMobile?'10px 14px':'11px 18px',background:this.PANEL,display:'flex',gap:20,flexWrap:'wrap',fontSize:12.5}},
+          h('span',{style:{color:this.MUTE}},'\u0e1e\u0e1a ',h('b',{style:{color:this.INK}},this.fmtN(src.length)),' \u0e09\u0e1a\u0e31\u0e1a'),
+          h('span',{style:{color:this.MUTE}},'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e23\u0e27\u0e21 ',h('b',{style:{color:this.INK,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(rptSum)))),
+        h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?720:'auto'}},
+          h('div',{style:{display:'grid',gridTemplateColumns:'130px 1fr 150px 120px 130px',padding:'10px 18px',background:'#fff',borderBottom:'1px solid '+this.LINE,fontSize:11,fontWeight:600,color:this.MUTE,textTransform:'uppercase'}},h('div',null,'\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48'),h('div',null,'\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23'),h('div',null,'\u0e2b\u0e19\u0e48\u0e27\u0e22\u0e07\u0e32\u0e19'),h('div',{style:{textAlign:'right'}},'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32'),h('div',null,'\u0e2a\u0e16\u0e32\u0e19\u0e30/\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48')),
+          src.length? src.map(x=>h('div',{key:x.id,onClick:()=>this.openRec(x),style:{display:'grid',gridTemplateColumns:'130px 1fr 150px 120px 130px',padding:'11px 18px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',cursor:'pointer'}},
+            h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},x.id),
+            h('div',{style:{minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},rt==='br'?x.itemName:(x.items&&x.items[0]?x.items[0].d:'')),
+            h('div',{style:{minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',color:this.MUTE}},x.dn),
+            h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.baht(rt==='br'?x.value:x.total)),
+            h('div',{style:{fontSize:11,color:this.MUTE}},this.fdate((x.at||'').split(' ')[0]+' '+((x.at||'').split(' ')[1]||'')+' '+((x.at||'').split(' ')[2]||'')))))
+          : this.emptyBox('\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e43\u0e19\u0e0a\u0e48\u0e27\u0e07\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01'))))),
+      h('div',{style:{height:16}}),
       this.card(h('div',null,
         h('div',{style:{padding:R.isMobile?'14px':'15px 18px',borderBottom:'1px solid '+this.LINE,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}},
           h('div',{style:{fontSize:15,fontWeight:700}},'\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e1e\u0e23\u0e49\u0e2d\u0e21\u0e2a\u0e48\u0e07\u0e2d\u0e2d\u0e01\u0e40\u0e02\u0e49\u0e32\u0e23\u0e30\u0e1a\u0e1a SAP'),
@@ -1522,6 +1573,13 @@ class Component extends DCLogic {
             h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.baht(p.total)),
             h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5,color:p.po?this.BLUE:this.MUTE}},p.po||'\u2014'))))))));
   }
+  exportReportCsv(rt,rows){ const esc=s=>{ s=String(s==null?'':s); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; };
+    const head=rt==='br'? ['เลขที่ BR','รายการ','หน่วยงาน','จำนวน','หน่วย','มูลค่า','เลขที่งบประมาณ','สถานะ','วันที่'] : ['เลขที่ PR','เลขที่ BR','รายการ','หน่วยงาน','มูลค่า','เลขที่งบประมาณ','เลข PO','สถานะ','วันที่'];
+    const lines=[head.map(esc).join(',')];
+    rows.forEach(x=>{ const r= rt==='br'? [x.id,x.itemName,x.dn,x.qty,x.unit,x.value,x.budgetCode||'',x.status,x.at] : [x.id,x.brId||'',(x.items&&x.items[0]?x.items[0].d:''),x.dn,x.total,x.budgetCode||'',x.po||'',x.status,x.at]; lines.push(r.map(esc).join(',')); });
+    const csv='\uFEFF'+lines.join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='report_'+rt+'_'+(this.state.rptFrom||'all')+'_'+(this.state.rptTo||'all')+'.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+    this.toastMsg('ส่งออกรายงาน '+rt.toUpperCase()+' แล้ว ('+rows.length+' ฉบับ)'); }
 
   // ================= PO TRACK =================
   poFiltered(){ const q=this.state.poQ.trim().toLowerCase(); const dept=this.state.poDept; const tab=this.state.poTab;
@@ -1709,7 +1767,7 @@ class Component extends DCLogic {
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:8}}, docs.map((d,i)=>h('span',{key:i,style:{display:'flex',alignItems:'center',gap:7,padding:'7px 12px',borderRadius:9,background:this.BLUEBG,fontSize:12,color:'#215c96'}},h('span',null,'\uD83D\uDCCE'),d)))):null);
     const btns=[];
     btns.push(h('button',{key:'doc',onClick:()=>this.setState({docModal:rec.id,docType:rec.kind}),style:{padding:'10px 16px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',color:this.INK}},'\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23 '+(rec.kind==='br'?'BR':'PR')));
-    if(br && (this.state.role==='exec'||this.state.role==='admin') && rec.status==='\u0e23\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e1c\u0e39\u0e49\u0e1a\u0e23\u0e34\u0e2b\u0e32\u0e23'){
+    if(br && (this.state.role==='exec'||this.state.role==='budget'||this.state.role==='admin') && rec.status==='\u0e23\u0e2d\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e1c\u0e39\u0e49\u0e1a\u0e23\u0e34\u0e2b\u0e32\u0e23'){
       btns.push(h('button',{key:'rej',onClick:()=>this.brReject(rec.id),style:{padding:'10px 16px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:13,color:this.RED,cursor:'pointer',fontWeight:600}},'\u0e44\u0e21\u0e48\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34'));
       btns.push(h('button',{key:'ap',onClick:()=>this.setState({approveModal:rec.id,sel:null}),style:{padding:'10px 20px',border:'none',background:this.BLUE,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34\u0e43\u0e19\u0e2b\u0e25\u0e31\u0e01\u0e01\u0e32\u0e23'));
     }
@@ -1782,8 +1840,13 @@ class Component extends DCLogic {
       h('div',{style:{background:this.PANEL,borderRadius:11,padding:'14px 16px',marginBottom:18}},
         h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:6}},h('span',{style:{color:this.MUTE}},'\u0e07\u0e1a\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e01\u0e48\u0e2d\u0e19\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34'),h('b',{style:{fontFamily:"'IBM Plex Mono',monospace"}},this.baht(remain))),
         h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5}},h('span',{style:{color:this.MUTE}},'\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e2b\u0e25\u0e31\u0e07\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34'),h('b',{style:{fontFamily:"'IBM Plex Mono',monospace",color:remain-b.value>=0?this.GREEN:this.RED}},this.baht(remain-b.value)))),
-      h('div',{style:{display:'flex',gap:10}},
-        h('button',{onClick:()=>this.setState({approveModal:null}),style:{flex:1,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer',fontWeight:500}},'\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01'),
+      h('div',{style:{marginBottom:16}},
+        h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:6,fontWeight:500}},'\u0e04\u0e27\u0e32\u0e21\u0e40\u0e2b\u0e47\u0e19 / \u0e2b\u0e21\u0e32\u0e22\u0e40\u0e2b\u0e15\u0e38 (\u0e41\u0e2a\u0e14\u0e07\u0e43\u0e19\u0e44\u0e17\u0e21\u0e4c\u0e44\u0e25\u0e19\u0e4c)'),
+        h('textarea',{value:this.state.actionNote||'',onChange:e=>this.setState({actionNote:e.target.value}),placeholder:'\u0e40\u0e0a\u0e48\u0e19 \u0e40\u0e2b\u0e47\u0e19\u0e04\u0e27\u0e23\u0e08\u0e31\u0e14\u0e2b\u0e32\u0e43\u0e19\u0e44\u0e15\u0e23\u0e21\u0e32\u0e2a\u0e19\u0e35\u0e49 / \u0e43\u0e2b\u0e49\u0e17\u0e1a\u0e17\u0e27\u0e19\u0e23\u0e32\u0e04\u0e32\u0e01\u0e48\u0e2d\u0e19\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d',rows:2,style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'9px 11px',fontSize:13,outline:'none',resize:'vertical',fontFamily:'inherit'}})),
+      h('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
+        h('button',{onClick:()=>this.setState({approveModal:null,actionNote:''}),style:{flex:1,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer',fontWeight:500}},'\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01'),
+        h('button',{onClick:()=>this.brSendBack(b.id),style:{flex:1,padding:'12px',border:'1px solid '+this.AMBER,background:'#fff',borderRadius:10,fontSize:13.5,color:this.AMBER,cursor:'pointer',fontWeight:600}},'\u0e2a\u0e48\u0e07\u0e01\u0e25\u0e31\u0e1a\u0e41\u0e01\u0e49\u0e44\u0e02'),
+        h('button',{onClick:()=>this.brReject(b.id),style:{flex:1,padding:'12px',border:'1px solid '+this.RED,background:'#fff',borderRadius:10,fontSize:13.5,color:this.RED,cursor:'pointer',fontWeight:600}},'\u0e44\u0e21\u0e48\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34'),
         h('button',{onClick:()=>this.brApprove(b.id),style:{flex:2,padding:'12px',border:'none',background:this.BLUE,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34'))));
   }
 
@@ -1798,7 +1861,7 @@ class Component extends DCLogic {
         h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5,marginBottom:6}},h('span',{style:{color:this.MUTE}},'\u0e23\u0e2b\u0e31\u0e2a\u0e1e\u0e31\u0e2a\u0e14\u0e38'),h('b',{style:{fontFamily:"'IBM Plex Mono',monospace",color:this.TEAL}},b.code||'\u2014')),
         h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12.5}},h('span',{style:{color:this.MUTE}},'\u0e07\u0e1a\u0e17\u0e35\u0e48\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23'),h('b',null,b.budgetName))),
       h('div',{style:{display:'flex',gap:10}},
-        h('button',{onClick:()=>{this.searchItemMaster(b.itemName);this.setState({ackModal:null,itemProModal:b.id,itemProQ:b.itemName,itemProManual:''});},style:{flex:1,padding:'12px',border:'1px solid '+this.AMBER,background:'#fff',borderRadius:10,fontSize:13,color:this.AMBER,cursor:'pointer',fontWeight:600}},'\u0e41\u0e01\u0e49\u0e44\u0e02\u0e23\u0e2b\u0e31\u0e2a'),
+        h('button',{onClick:()=>{this.searchItemMaster('');this.setState({ackModal:null,itemProModal:b.id,itemProQ:'',itemProManual:''});},style:{flex:1,padding:'12px',border:'1px solid '+this.AMBER,background:'#fff',borderRadius:10,fontSize:13,color:this.AMBER,cursor:'pointer',fontWeight:600}},'\u0e41\u0e01\u0e49\u0e44\u0e02\u0e23\u0e2b\u0e31\u0e2a'),
         h('button',{onClick:()=>{this.setState({ackModal:null});this.brAllocate(b.id,b.code);},style:{flex:2,padding:'12px',border:'none',background:this.TEAL,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'\u0e22\u0e37\u0e19\u0e22\u0e31\u0e19\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23\u0e07\u0e1a'))));
   }
 
