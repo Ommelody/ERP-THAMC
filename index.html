@@ -253,7 +253,7 @@ class Component extends DCLogic {
   shell(content){
     const h=React.createElement; const R=this.R;
     if(R.isMobile) return h('div',{style:{minHeight:'100vh',background:this.BG}},
-      this.topbar(), h('div',{style:{padding:'14px 13px 90px'}}, this.nextStepBanner(), content),
+      this.topbar(), h('div',{style:{padding:'14px 13px 90px'}}, content),
       this.state.drawer? this.drawer():null, this.mobileNav(),
       this.state.sel? this.detailModal():null, this.state.approveModal? this.approveSheet():null,
       this.state.poBindModal? this.poBindSheet():null, this.extraModals(),
@@ -262,7 +262,7 @@ class Component extends DCLogic {
       this.sidebar(),
       h('div',{style:{flex:1,minWidth:0,display:'flex',flexDirection:'column'}},
         this.topbar(),
-        h('div',{style:{flex:1,padding:R.isTablet?'20px 22px 60px':'26px 34px 70px',maxWidth:1440,width:'100%',margin:'0 auto'}}, this.nextStepBanner(), content)),
+        h('div',{style:{flex:1,padding:R.isTablet?'20px 22px 60px':'26px 34px 70px',maxWidth:1440,width:'100%',margin:'0 auto'}}, content)),
       this.state.sel? this.detailModal():null, this.state.approveModal? this.approveSheet():null,
       this.state.poBindModal? this.poBindSheet():null, this.extraModals(),
       this.state.roleMenu? this.roleSheet():null, this.state.notifOpen? this.notifPanel():null, this.state.confirm? this.confirmModal():null, this.state.toast? this.toastEl():null);
