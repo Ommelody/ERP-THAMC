@@ -519,6 +519,7 @@ class Component extends DCLogic {
       this.toastMsg('เชื่อมต่อฐานข้อมูล Supabase สำเร็จ — พร้อมคีย์ข้อมูลจริง');
       this.setState({br:(br||[]).map(x=>this.brFromDb(x)), pr:(pr||[]).map(x=>this.prFromDb(x)), loaded:true, online:true});
       this.loadUsers(sb);
+      this.loadSap(sb);
       this.syncItemPro(); this.startItemProPoll(); this.searchItemMaster(''); this.subscribeRealtime(sb);
     }catch(err){ console.warn('supabase load failed',err); this.toastMsg('ยังไม่ได้สร้างตารางใน Supabase — ใช้โหมดสาธิตชั่วคราว'); fallback(); }
   }
