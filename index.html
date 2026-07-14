@@ -711,21 +711,22 @@ class Component extends DCLogic {
   // Copy to PR — คัดลอกข้อมูลจาก BR ไปหน้า "สร้างใบขอซื้อ"
   copyToPr(brId){ const b=this.brById(brId); if(!b) return;
     const items=[{d:b.itemName,c:b.code||'(รอออกรหัส)',u:b.unit,qty:b.qty,price:Math.round(b.value/(b.qty||1)),total:b.value,rate:'',vat:true}];
-    const draft={brId:b.id,requester:b.requester,dept:b.dept,dn:b.dn,tel:b.tel||'',pos:b.pos,items,cat:b.cat,exp:b.cat,procType:b.procType||'ซื้อ',urgency:'ปกติ',reason:b.reason,committee:['','',''],neededDate:b.neededDate,budgetName:b.budgetName,budgetCode:b.budgetCode||'',code:b.code};
+    const draft={brId:b.id,requester:b.requester,dept:b.dept,dn:b.dn,tel:b.tel||'',pos:b.pos,vatMode:'excl',items,cat:b.cat,exp:b.cat,procType:b.procType||'ซื้อ',urgency:'ปกติ',reason:b.reason,committee:['','',''],neededDate:b.neededDate,budgetName:b.budgetName,budgetCode:b.budgetCode||'',code:b.code};
     this.setState({prDraft:draft,page:'pr-create',sel:null,drawer:false}); this.toastMsg('คัดลอกข้อมูลจาก '+b.id+' — กรอกใบขอซื้อให้ครบแล้วส่ง'); window.scrollTo&&window.scrollTo(0,0); }
   // สร้างใบขอซื้อใหม่ (ไม่ต้องมี BR อนุมัติก่อน)
   newBlankPr(){ const u=this.role().user; const parts=(u.sub||'').split('·'); const dn=(parts[0]||'').trim()||'หน่วยงานของฉัน'; const dept=(parts[1]||'').trim()||'13ORD';
-    const draft={brId:null,requester:u.name,dept,dn,tel:'',pos:'',items:[{d:'',c:'',u:'ชิ้น',qty:1,price:0,total:0,rate:'',vat:true}],cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',exp:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',procType:'ซื้อ',urgency:'ปกติ',reason:'',committee:['','',''],neededDate:'',budgetName:'',code:''};
+    const draft={brId:null,requester:u.name,dept,dn,tel:'',pos:'',vatMode:'excl',items:[{d:'',c:'',u:'ชิ้น',qty:1,price:0,total:0,rate:'',vat:true}],cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',exp:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',procType:'ซื้อ',urgency:'ปกติ',reason:'',committee:['','',''],neededDate:'',budgetName:'',code:''};
     this.setState({prDraft:draft,page:'pr-create',sel:null,drawer:false}); this.toastMsg('สร้างใบขอซื้อใหม่ — กรอกรายละเอียดให้ครบแล้วส่ง'); window.scrollTo&&window.scrollTo(0,0); }
   // ส่งใบขอซื้อ (PR) จากหน้าสร้างใบขอซื้อ
-  submitPr(draft){ if(draft.editId){ const ex=this.prById(draft.editId); if(ex){ const s2=draft.items.reduce((a,it)=>a+(it.total||0),0); const v2=draft.items.reduce((a,it)=>a+(it.vat?Math.round((it.total||0)*0.07):0),0);
-      this.persistPr(Object.assign({},ex,{items:draft.items,sub:s2,vat:v2,total:s2+v2,cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,committee:(draft.committee||[]).filter(c=>c&&c.trim()),tel:draft.tel,neededDate:draft.neededDate,status:'ยื่นเสนอซื้อ',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและส่งใบขอซื้อใหม่',by:draft.requester,at:this.now(),note:'แก้ไขตามที่พัสดุแจ้งและส่งกลับให้พัสดุอีกครั้ง'}])})); }
+  submitPr(draft){ if(draft.editId){ const ex=this.prById(draft.editId); if(ex){ const inc2=draft.vatMode==='incl'; const lt2=it=>it.vat?(inc2?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0; const s2=draft.items.reduce((a,it)=>a+((it.total||0)-(inc2?lt2(it):0)),0); const v2=draft.items.reduce((a,it)=>a+lt2(it),0);
+      this.persistPr(Object.assign({},ex,{items:draft.items,sub:s2,vat:v2,total:s2+v2,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,committee:(draft.committee||[]).filter(c=>c&&c.trim()),tel:draft.tel,neededDate:draft.neededDate,status:'ยื่นเสนอซื้อ',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและส่งใบขอซื้อใหม่',by:draft.requester,at:this.now(),note:'แก้ไขตามที่พัสดุแจ้งและส่งกลับให้พัสดุอีกครั้ง'}])})); }
       this.setState({prDraft:null,page:'my-requests',sel:draft.editId,selType:'pr'}); this.toastMsg('แก้ไขและส่งใบขอซื้อ '+draft.editId+' ใหม่แล้ว'); return; }
     const id='PR-'+this.ymCode()+'-'+String(1000+(this.state.pr||[]).length+1).slice(1);
-    const sub=draft.items.reduce((a,it)=>a+(it.total||0),0); const vat=draft.items.reduce((a,it)=>a+(it.vat?Math.round((it.total||0)*0.07):0),0);
+    const inc=draft.vatMode==='incl'; const lt=it=>it.vat?(inc?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0;
+    const sub=draft.items.reduce((a,it)=>a+((it.total||0)-(inc?lt(it):0)),0); const vat=draft.items.reduce((a,it)=>a+lt(it),0);
     const committee=(draft.committee||[]).filter(c=>c&&c.trim());
     const pr={kind:'pr',id,brId:draft.brId,requester:draft.requester,dept:draft.dept,dn:draft.dn,tel:draft.tel,pos:draft.pos,
-      items:draft.items,sub,vat,total:sub+vat,cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,
+      items:draft.items,sub,vat,total:sub+vat,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,
       committee,condition:'',po:'',vendor:'',docs:[],status:'ยื่นเสนอซื้อ',at:this.D.meta.today,neededDate:draft.neededDate,budgetCode:draft.budgetCode||'',gd:0,ap:0,paid:0,grl:[],
       log:[{s:'Copy to PR — สร้างใบขอซื้อ',by:draft.requester,at:this.now()}]};
     this.insertPr(pr); if(draft.brId){ const b=this.brById(draft.brId); if(b) this.persistBr(Object.assign({},b,{prId:id})); }
@@ -756,7 +757,7 @@ class Component extends DCLogic {
     this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[id]:''}),sel:null})); this.toastMsg('ส่งใบขอซื้อ '+id+' กลับให้ผู้ขอแก้ไขแล้ว'); }
   prResubmit(id){ const p=this.prById(id); if(!p)return;
     const items=(p.items&&p.items.length)?p.items.map(it=>Object.assign({},it,{vat:it.vat!==false})):[{d:'',c:'',u:'ชิ้น',qty:1,price:0,total:0,vat:true}];
-    const draft={editId:p.id,brId:p.brId||null,requester:p.requester,dept:p.dept,dn:p.dn,tel:p.tel||'',pos:p.pos||'',items,cat:p.cat,exp:p.exp||p.cat,procType:p.procType||'ซื้อ',urgency:p.urgency||'ปกติ',reason:p.reason,committee:(p.committee&&p.committee.length)?p.committee.slice():[''],neededDate:p.neededDate,budgetCode:p.budgetCode||'',code:p.code||''};
+    const draft={editId:p.id,brId:p.brId||null,requester:p.requester,dept:p.dept,dn:p.dn,tel:p.tel||'',pos:p.pos||'',vatMode:p.vatMode||'excl',items,cat:p.cat,exp:p.exp||p.cat,procType:p.procType||'ซื้อ',urgency:p.urgency||'ปกติ',reason:p.reason,committee:(p.committee&&p.committee.length)?p.committee.slice():[''],neededDate:p.neededDate,budgetCode:p.budgetCode||'',code:p.code||''};
     this.setState({prDraft:draft,page:'pr-create',sel:null,drawer:false}); this.toastMsg('แก้ไขใบขอซื้อ '+p.id+' แล้วกดส่งใหม่'); window.scrollTo&&window.scrollTo(0,0); }
   openBindPo(id){ this.setState({poBindModal:id, poBindInput:this.suggestPo(this.prById(id)), poDocs:[], sel:null}); }
   suggestPo(pr){ return (pr&&pr.po)||''; }
@@ -1955,7 +1956,10 @@ class Component extends DCLogic {
       h('div',{style:{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}},
         h('button',{onClick:()=>this.newBlankPr(),style:{padding:'11px 22px',border:'none',background:this.TEAL,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'＋ สร้างใบขอซื้อใหม่'),
         h('button',{onClick:()=>this.go('my-requests'),style:{padding:'11px 22px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'Copy to PR จากคำขอของฉัน')))); }
-    const sub=(d.items||[]).reduce((a,it)=>a+(it.total||0),0); const vat=(d.items||[]).reduce((a,it)=>a+(it.vat?Math.round((it.total||0)*0.07):0),0); const total=sub+vat; const need3=total>100000;
+    const incl=d.vatMode==='incl';
+    const lineTax=it=>it.vat?(incl?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0;
+    const lineNet=it=>(it.total||0)+(it.vat&&!incl?Math.round((it.total||0)*0.07):0);
+    const sub=(d.items||[]).reduce((a,it)=>a+((it.total||0)-(incl?lineTax(it):0)),0); const vat=(d.items||[]).reduce((a,it)=>a+lineTax(it),0); const total=sub+vat; const need3=total>100000;
     const lab=(t,req)=>h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},t,req?h('span',{style:{color:this.RED}},' *'):null);
     const box=(labEl,inner,full)=>h('div',{style:{gridColumn:full?'1/-1':'auto'}},labEl,inner);
     const ro=(v)=>h('div',{style:{fontSize:13.5,color:this.INK,background:this.PANEL,border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px'}},v);
@@ -1974,7 +1978,7 @@ class Component extends DCLogic {
       h('input',{value:it.u||'',placeholder:'หน่วย',onChange:e=>this.updItem(i,{u:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 7px',fontSize:12,outline:'none'}}),
       h('input',{value:it.price,onChange:e=>this.updItem(i,{price:e.target.value.replace(/[^0-9.]/g,'')}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:12.5,outline:'none',textAlign:'right',fontFamily:"'IBM Plex Mono',monospace"}}),
       h('div',{style:{textAlign:'center'}},h('input',{type:'checkbox',checked:!!it.vat,onChange:e=>this.updItem(i,{vat:e.target.checked}),title:'คิด VAT 7% บรรทัดนี้',style:{width:17,height:17,cursor:'pointer',accentColor:this.TEAL}})),
-      h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.fmtN((it.total||0)+(it.vat?Math.round((it.total||0)*0.07):0))),
+      h('div',{style:{textAlign:'right',fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},this.fmtN(lineNet(it))),
       h('div',{onClick:()=>this.delItem(i),style:{textAlign:'center',color:this.RED,cursor:'pointer',fontSize:15}},'✕')));
     const totalsRow=(t,v,big)=>h('div',{style:{display:'flex',justifyContent:'space-between',fontSize:big?16:13,fontWeight:big?700:400,color:big?this.INK:this.MUTE,borderTop:big?'1px solid '+this.LINE:'none',paddingTop:big?9:0}},h('span',null,t),h('span',{style:{fontFamily:"'IBM Plex Mono',monospace",color:big?this.TEAL:this.INK}},this.fmtN(v)));
     return h('div',{style:{maxWidth:940,margin:'0 auto'}},
@@ -1997,11 +2001,11 @@ class Component extends DCLogic {
               itemRows)),
           h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginTop:14,flexWrap:'wrap',gap:14}},
             h('span',{onClick:()=>this.addItem(),style:{fontSize:12.5,color:this.TEAL,fontWeight:600,border:'1px dashed '+this.TEAL,padding:'8px 14px',borderRadius:9,cursor:'pointer'}},'＋ เพิ่มรายการ'),
-            h('div',{style:{minWidth:240,display:'flex',flexDirection:'column',gap:7}},
-              h('div',{style:{display:'flex',gap:6,marginBottom:4}},
-                [['all','คิด VAT ทุกบรรทัด'],['none','ไม่คิด VAT']].map(o=>h('div',{key:o[0],onClick:()=>this.setAllVat(o[0]==='all'),style:{flex:1,textAlign:'center',cursor:'pointer',fontSize:11.5,padding:'7px',borderRadius:8,border:'1.5px solid '+this.LINE,background:'#fff',color:this.MUTE,fontWeight:500}},o[1]))),
+            h('div',{style:{minWidth:250,display:'flex',flexDirection:'column',gap:7}},
+              h('div',{style:{display:'flex',gap:5,marginBottom:2}},
+                [['none','ไม่คิด VAT'],['excl','บวก VAT เพิ่ม'],['incl','ราคารวม VAT แล้ว']].map(o=>{ const on=o[0]==='none'?false:(d.vatMode||'excl')===o[0]; const setM=()=>{ if(o[0]==='none')this.setAllVat(false); else this.updDraft({vatMode:o[0]}),this.setAllVat(true); }; return h('div',{key:o[0],onClick:setM,style:{flex:1,textAlign:'center',cursor:'pointer',fontSize:11,padding:'7px 4px',borderRadius:8,border:'1.5px solid '+(on?this.TEAL:this.LINE),background:on?'#f0f8f6':'#fff',color:on?this.TEAL:this.MUTE,fontWeight:on?600:400,lineHeight:1.25}},o[1]); })),
               totalsRow('มูลค่าสินค้า (ก่อน VAT)',sub),
-              totalsRow('ภาษีมูลค่าเพิ่ม 7% (ตามบรรทัดที่ติ๊ก)',vat),
+              totalsRow('ภาษีมูลค่าเพิ่ม 7%'+(incl?' (ถอดจากยอดรวม)':' (ตามบรรทัดที่ติ๊ก)'),vat),
               totalsRow('ยอดรวมสุทธิ',total,true))))),
       card('03','กรรมการตรวจรับ',h('span',{style:{fontSize:11.5,color:need3?this.AMBER:this.MUTE}},need3?'เกิน 100,000 บาท — ต้องมีอย่างน้อย 3 คน':'ไม่เกิน 100,000 บาท — อย่างน้อย 1 คน'),
         h('div',null,
