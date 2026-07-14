@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
 <script src="./xlsx-lite.js"></script>
+<script src="./xlsx-write.js"></script>
 </head>
 <body>
 <x-dc>
@@ -1780,6 +1781,9 @@ class Component extends DCLogic {
     if(!br && (this.state.role==='procurement'||this.state.role==='admin') && ['\u0e1e\u0e31\u0e2a\u0e14\u0e38\u0e23\u0e31\u0e1a\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07','\u0e01\u0e33\u0e25\u0e31\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23\u0e08\u0e31\u0e14\u0e0b\u0e37\u0e49\u0e2d'].includes(rec.status)){
       btns.push(h('button',{key:'po',onClick:()=>this.openBindPo(rec.id),style:{padding:'10px 20px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'\u0e01\u0e23\u0e2d\u0e01\u0e40\u0e25\u0e02 PO + \u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14'));
     }
+    if(!br && (this.state.role==='procurement'||this.state.role==='admin')){
+      btns.push(h('button',{key:'x2s',onClick:()=>this.downloadSapExcel([rec]),style:{padding:'10px 18px',border:'1px solid #0a6b3c',background:'#eaf5ee',borderRadius:9,fontSize:13,color:'#0a6b3c',cursor:'pointer',fontWeight:600}},'\u2b07 Excel \u2192 SAP'));
+    }
     const footer=h('div',{style:{padding:R.isMobile?'12px 18px calc(12px + env(safe-area-inset-bottom))':'14px 24px',borderTop:'1px solid '+this.LINE,display:'flex',gap:10,justifyContent:'flex-end',flexWrap:'wrap'}},btns);
     return this.modalShell(title,sub,body,footer);
   }
@@ -2387,24 +2391,37 @@ class Component extends DCLogic {
       h('button',{onClick:close,style:{width:'100%',marginTop:16,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer'}},'ปิด')));
   }
 
+  SAP_PQ_COLS=['Type','Item No.','Item Description','Item Details','Vendor','Required Date','Required Qty.','UoM Group','UoM Code','UoM Name','Info Price','Gross Price','Discount %','Tax Code','Total (LC)','Whse','Project','Business Type','Department'];
+  sapReqDate(s){ const d=this.parseThai(s); if(!d)return s||''; const dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String((d.getFullYear()+543)%100).padStart(2,'0'); return dd+'.'+mm+'.'+yy; }
+  sapPqRows(prs){ const rows=[this.SAP_PQ_COLS.slice()]; const tax=this.state.exportVat===false?'':'IEH07';
+    prs.forEach(p=>{ const bt=(p.dept||'').replace(/[^0-9]/g,'').slice(0,2)||(p.dept||'').slice(0,2); const uom=''; 
+      (p.items||[]).forEach(it=>{ const gross=it.qty?Math.round((it.total/it.qty)*100)/100:it.price||0; const price=it.price||gross;
+        rows.push([null,it.c||'',it.d||'',null,p.vendor||'',this.sapReqDate(p.neededDate),it.qty||0,it.u||'',it.u||'',it.u||'',price,gross,0,tax,'THB '+this.fmtN(it.total||0),p.dept||'',null,bt,p.dept||'']); }); });
+    return rows; }
+  downloadSapExcel(prs){ if(!window.buildXlsx){ this.toastMsg('ตัวสร้างไฟล์ยังไม่พร้อม'); return; }
+    if(!prs.length){ this.toastMsg('ไม่มีใบขอซื้อที่ออก PR แล้ว'); return; }
+    const rows=this.sapPqRows(prs); const fn='SAP_PQ_Import_'+this.ymCode()+'.xlsx';
+    window.downloadXlsx(fn,'PQ',rows); this.toastMsg('ดาวน์โหลด '+fn+' แล้ว ('+(rows.length-1)+' รายการ · '+prs.length+' ใบ) — นำเข้า SAP ได้ทันที'); }
   exportSheet(){
     const h=React.createElement; const R=this.R; const close=()=>this.setState({exportModal:false});
-    const cols=['Numerator','Prefix','DocNumber','DocDate','DeliveryDate','VendorCode','VendorName','ItemCode','ItemName','Qty','UOM','UnitPrice','LineTotal','VAT','DocTotal','Dept','BudgetCode','GLAccount','Remark'];
-    const prs=this.prs().filter(p=>p.po).slice(0,5);
+    const cols=this.SAP_PQ_COLS;
+    const prs=this.prs().filter(p=>p.po||p.status!=='ตีกลับ');
+    const rows=this.sapPqRows(prs); const preview=rows.slice(1,7);
     return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.5)',zIndex:88,display:'flex',justifyContent:'center',alignItems:R.isMobile?'flex-end':'center',padding:R.isMobile?0:20,animation:'overlayIn .15s'}},
       h('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:R.isMobile?'18px 18px 0 0':16,width:'100%',maxWidth:820,maxHeight:'90vh',overflowY:'auto',padding:'22px 22px 24px',boxShadow:'0 24px 60px rgba(10,25,22,.3)',animation:'sheetIn .22s'}},
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,gap:10}},
-          h('div',{style:{fontSize:17,fontWeight:700}},'Export Excel \u2192 SAP (19 \u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c)'),
+          h('div',{style:{fontSize:17,fontWeight:700}},'Excel \u2192 SAP \u00b7 Purchase Quotation (19 \u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c)'),
           h('button',{onClick:close,style:{border:'1px solid '+this.LINE,background:'#fff',width:32,height:32,borderRadius:8,cursor:'pointer',fontSize:15,color:this.MUTE}},'\u2715')),
-        h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:16,lineHeight:1.55}},'\u0e23\u0e39\u0e1b\u0e41\u0e1a\u0e1a\u0e44\u0e1f\u0e25\u0e4c\u0e15\u0e32\u0e21\u0e42\u0e04\u0e23\u0e07\u0e2a\u0e23\u0e49\u0e32\u0e07 import \u0e02\u0e2d\u0e07 SAP \u2014 \u0e40\u0e08\u0e49\u0e32\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e08\u0e31\u0e14\u0e0b\u0e37\u0e49\u0e2d\u0e19\u0e33\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e19\u0e35\u0e49\u0e44\u0e1b\u0e2a\u0e23\u0e49\u0e32\u0e07 PO \u0e43\u0e19 SAP \u0e15\u0e48\u0e2d'),
+        h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:16,lineHeight:1.55}},'\u0e15\u0e32\u0e23\u0e32\u0e07\u0e15\u0e32\u0e21\u0e23\u0e39\u0e1b\u0e41\u0e1a\u0e1a\u0e40\u0e14\u0e34\u0e21\u0e02\u0e2d\u0e07\u0e23\u0e30\u0e1a\u0e1a PR Order (Purchase Quotation) \u2014 \u0e23\u0e27\u0e21\u0e17\u0e38\u0e01\u0e43\u0e1a\u0e02\u0e2d\u0e0b\u0e37\u0e49\u0e2d\u0e17\u0e35\u0e48\u0e2d\u0e2d\u0e01 PR \u0e41\u0e25\u0e49\u0e27 '+prs.length+' \u0e43\u0e1a \u00b7 '+(rows.length-1)+' \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23 \u2014 \u0e19\u0e33\u0e40\u0e02\u0e49\u0e32 SAP \u0e44\u0e14\u0e49\u0e17\u0e31\u0e19\u0e17\u0e35'),
         h('div',{style:{overflowX:'auto',border:'1px solid '+this.LINE,borderRadius:10,marginBottom:16}},
-          h('div',{style:{minWidth:1400}},
-            h('div',{style:{display:'flex',background:this.PANEL,borderBottom:'1px solid '+this.LINE}}, cols.map((c,i)=>h('div',{key:i,style:{flex:'0 0 auto',width:i<2?70:120,padding:'8px 10px',fontSize:10,fontWeight:700,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace",borderRight:'1px solid '+this.LINE,whiteSpace:'nowrap'}},c))),
-            prs.map((p,ri)=>{ const it=p.items[0]; const vals=[String(ri+1),'PR',p.po||'-',p.at,p.neededDate||'-','V'+(1000+ri),p.vendor||'-',it.c,it.d,String(it.qty),it.u,this.fmtN(it.total/it.qty),this.fmtN(it.total),this.fmtN(p.vat),this.fmtN(p.total),p.dept,p.cat.slice(0,8),'5'+(1000+ri),p.id];
-              return h('div',{key:ri,style:{display:'flex',borderBottom:'1px solid #f0f3f2'}}, vals.map((v,i)=>h('div',{key:i,style:{flex:'0 0 auto',width:i<2?70:120,padding:'8px 10px',fontSize:11,borderRight:'1px solid #f0f3f2',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontFamily:(i>=9)?"'IBM Plex Mono',monospace":'inherit'}},v))); }))),
+          h('div',{style:{minWidth:1700}},
+            h('div',{style:{display:'flex',background:this.PANEL,borderBottom:'1px solid '+this.LINE}}, cols.map((c,i)=>h('div',{key:i,style:{flex:'0 0 auto',width:90,padding:'8px 10px',fontSize:10,fontWeight:700,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace",borderRight:'1px solid '+this.LINE,whiteSpace:'nowrap'}},c))),
+            preview.map((vals,ri)=>
+              h('div',{key:ri,style:{display:'flex',borderBottom:'1px solid #f0f3f2'}}, cols.map((c,i)=>h('div',{key:i,style:{flex:'0 0 auto',width:90,padding:'8px 10px',fontSize:11,borderRight:'1px solid #f0f3f2',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontFamily:(i>=6)?"'IBM Plex Mono',monospace":'inherit'}},vals[i]==null?'':String(vals[i]))))),
+            rows.length-1>preview.length? h('div',{style:{padding:'8px 12px',fontSize:11,color:this.MUTE}},'\u2026 \u0e41\u0e25\u0e30\u0e2d\u0e35\u0e01 '+(rows.length-1-preview.length)+' \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23'):null)),
         h('div',{style:{display:'flex',gap:10,justifyContent:'flex-end'}},
           h('button',{onClick:close,style:{padding:'11px 20px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13,color:this.INK,cursor:'pointer'}},'\u0e1b\u0e34\u0e14'),
-          h('button',{onClick:()=>{this.toastMsg('\u0e14\u0e32\u0e27\u0e19\u0e4c\u0e42\u0e2b\u0e25\u0e14\u0e44\u0e1f\u0e25\u0e4c SAP_Import.xlsx \u0e41\u0e25\u0e49\u0e27 ('+prs.length+' \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23)');close();},style:{padding:'11px 22px',border:'none',background:'#0a6b3c',color:'#fff',borderRadius:10,fontSize:13,cursor:'pointer',fontWeight:600}},'\u2b07 \u0e14\u0e32\u0e27\u0e19\u0e4c\u0e42\u0e2b\u0e25\u0e14 .xlsx'))));
+          h('button',{onClick:()=>{this.downloadSapExcel(prs);close();},style:{padding:'11px 22px',border:'none',background:'#0a6b3c',color:'#fff',borderRadius:10,fontSize:13,cursor:'pointer',fontWeight:600}},'\u2b07 \u0e14\u0e32\u0e27\u0e19\u0e4c\u0e42\u0e2b\u0e25\u0e14 .xlsx'))));
   }
 
   poBindSheet(){
