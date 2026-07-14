@@ -2065,11 +2065,22 @@ class Component extends DCLogic {
     window.readXlsxFile(file).then(async wbk=>{
       const sheets=wbk.sheets, first=wbk.order[0], rows=sheets[first]||[];
       if(kind==='budget'){
-        // Summary sheet: header row idx1; E(4)plan H(7)exp I(8)name G(6)level S(18)current Y(24)commit Z(25)actual AA(26)avail
-        const sh=sheets['Summary']||rows; const codeM={};
-        for(let i=2;i<sh.length;i++){ const r=sh[i]||[]; if(String(r[6]||'').trim()!=='5')continue; const exp=String(r[7]||'').trim(); if(!exp)continue;
-          const e=codeM[exp]||(codeM[exp]={exp,name:String(r[8]||'').trim(),plan:String(r[4]||'').trim(),sub:String(r[5]||'').trim(),current:0,commit:0,actual:0,avail:0,dept:String(r[11]||'').trim(),deptCode:String(r[10]||'').trim()});
-          e.current+=num(r[18]); e.commit+=num(r[24]); e.actual+=num(r[25]); e.avail+=num(r[26]); }
+        // Summary sheet — อ่านหัวคอลัมน์อัตโนมัติ (รองรับไฟล์เก่า/ใหม่ที่คอลัมน์เลื่อน)
+        const sh=sheets['Summary']||rows;
+        let hi=-1; for(let i=0;i<Math.min(sh.length,12);i++){ const rr=(sh[i]||[]).map(x=>String(x||'').trim().toLowerCase()); if(rr.indexOf('level')>=0 && rr.some(c=>c.indexOf('expense code')>=0)){ hi=i; break; } }
+        if(hi<0) hi=0;
+        const H=(sh[hi]||[]).map(x=>String(x||'').trim().toLowerCase());
+        const col=(...names)=>{ for(const nm of names){ let idx=H.indexOf(nm); if(idx>=0)return idx; idx=H.findIndex(c=>c.indexOf(nm)>=0); if(idx>=0)return idx; } return -1; };
+        const cL=col('level'), cE=col('expense code'), cN=col('expense name'), cP=col('budget plan code','budget plan'), cS=col('budget subtype','budget sub'),
+              cDC=col('department code'), cDN=col('department name'), cCur=col('current budget'), cCom=col('commit amount'), cAct=col('actual amount'), cAv=col('avaliable amount','available amount');
+        // เลือก level ที่ลึกสุดที่มีเลขงบครบ (5=มีหน่วยงาน, สำรอง 4)
+        const hasL5=sh.some((r,i)=>i>hi && String((r||[])[cL]||'').trim()==='5');
+        const useLv=hasL5?'5':'4';
+        const codeM={};
+        for(let i=hi+1;i<sh.length;i++){ const r=sh[i]||[]; if(String(r[cL]||'').trim()!==useLv)continue; const exp=String(r[cE]||'').trim(); if(!exp)continue;
+          const key=exp+'|'+String(r[cDC]||'');
+          const e=codeM[key]||(codeM[key]={exp,name:String(r[cN]||'').trim(),plan:String(r[cP]||'').trim(),sub:String(r[cS]||'').trim(),current:0,commit:0,actual:0,avail:0,dept:String(r[cDN]||'').trim(),deptCode:String(r[cDC]||'').trim()});
+          e.current+=num(r[cCur]); e.commit+=num(r[cCom]); e.actual+=num(r[cAct]); e.avail+=num(r[cAv]); }
         const codes=Object.values(codeM).map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:Math.round(c.current),commit:Math.round(c.commit),actual:Math.round(c.actual),avail:Math.round(c.avail),dept:c.dept,deptCode:c.deptCode}));
         const tot=codes.reduce((a,c)=>({current:a.current+c.current,commit:a.commit+c.commit,actual:a.actual+c.actual,avail:a.avail+c.avail}),{current:0,commit:0,actual:0,avail:0});
         this.D.budgetSap={generated:this.D.meta.today,codes,totals:tot};
