@@ -86,9 +86,9 @@ class Component extends DCLogic {
     const t=()=>{ if(window.ERPDATA){ this.D=window.ERPDATA; this.D.po=[]; this.D.ap=[]; this.D.pay=[]; this.loadSapLocal(); this.setState({ready:true,vw:this._winW(),page:this.roleHome('requester'),uploads:this._restoredUploads||{}}); this.loadDb(); } else setTimeout(t,60); };
     t();
   }
-  saveSapLocal(){ try{ localStorage.setItem('thamc_sap', JSON.stringify({po:this.D.po,ap:this.D.ap,pay:this.D.pay,budgetSap:this.D.budgetSap,uploads:this.state.uploads})); }catch(e){} }
+  saveSapLocal(){ try{ localStorage.setItem('thamc_sap', JSON.stringify({po:this.D.po,ap:this.D.ap,pay:this.D.pay,budgetSap:this.D.budgetSap,paidInv:this.D.paidInv,uploads:this.state.uploads})); }catch(e){} }
   loadSapLocal(){ try{ const s=localStorage.getItem('thamc_sap'); if(!s) return; const d=JSON.parse(s);
-    if(d.po&&d.po.length) this.D.po=d.po; if(d.ap&&d.ap.length) this.D.ap=d.ap; if(d.pay&&d.pay.length) this.D.pay=d.pay;
+    if(d.po&&d.po.length) this.D.po=d.po; if(d.ap&&d.ap.length) this.D.ap=d.ap; if(d.pay&&d.pay.length) this.D.pay=d.pay; if(d.paidInv) this.D.paidInv=d.paidInv;
     if(d.budgetSap&&d.budgetSap.codes&&d.budgetSap.codes.length) this.D.budgetSap=d.budgetSap;
     if(d.uploads) this._restoredUploads=d.uploads; }catch(e){} }
   componentWillUnmount(){ this.stopScan(); if(this._onResize) window.removeEventListener('resize',this._onResize); if(this._ipPoll) clearInterval(this._ipPoll); if(this._rtSub){ try{ this._rtSub.unsubscribe(); }catch(e){} } }
@@ -1592,15 +1592,15 @@ class Component extends DCLogic {
 
   // ================= PAY TRACK =================
   pgPayTrack(){
-    const h=React.createElement; const R=this.R; const tab=this.state.payTab;
+    const h=React.createElement; const R=this.R; const tab=this.state.payTab; const S=this.liveSum();
     const unpaid=this.D.ap.filter(a=>!a.paid); const paid=this.D.ap.filter(a=>a.paid);
     const list= tab==='unpaid'?unpaid : tab==='paid'?paid : this.D.pay;
     return h('div',null,
       this.kpiGrid([
-        {label:'ค้างจ่าย',val:this.fmtN(this.D.summary.apUnpaid),unit:'ใบ',c:this.RED,accent:this.RED,sub:'฿'+this.fmtM(this.D.summary.apUnpaidVal)+' ล้าน'},
-        {label:'จ่ายแล้ว',val:this.fmtN(this.D.summary.apPaid),unit:'ใบ',c:this.GREEN,accent:this.GREEN,sub:'฿'+this.fmtM(this.D.summary.apPaidVal)+' ล้าน'},
-        {label:'รายการจ่ายเงิน',val:this.fmtN(this.D.summary.payCount),unit:'ครั้ง',accent:this.BLUE},
-        {label:'ยอดจ่ายรวม',val:'฿'+this.fmtM(this.D.summary.apPaidVal),unit:'ลบ.',c:this.INK,accent:this.TEAL}
+        {label:'ค้างจ่าย',val:this.fmtN(S.apUnpaid),unit:'ใบ',c:this.RED,accent:this.RED,sub:'฿'+this.fmtM(S.apUnpaidVal)+' ล้าน'},
+        {label:'จ่ายแล้ว',val:this.fmtN(S.apPaid),unit:'ใบ',c:this.GREEN,accent:this.GREEN,sub:'฿'+this.fmtM(S.apPaidVal)+' ล้าน'},
+        {label:'รายการจ่ายเงิน',val:this.fmtN(S.payCount),unit:'ครั้ง',accent:this.BLUE},
+        {label:'ยอดจ่ายรวม',val:'฿'+this.fmtM(S.apPaidVal),unit:'ลบ.',c:this.INK,accent:this.TEAL}
       ],4),
       this.card(h('div',null,
         h('div',{style:{padding:R.isMobile?'12px 14px':'12px 18px',borderBottom:'1px solid '+this.LINE,display:'flex',gap:7,flexWrap:'wrap'}},
@@ -1642,14 +1642,14 @@ class Component extends DCLogic {
 
   // ================= PAY RUN (finance) =================
   pgPayRun(){
-    const h=React.createElement; const R=this.R; const list=this.D.ap.filter(a=>!a.paid);
+    const h=React.createElement; const R=this.R; const list=this.D.ap.filter(a=>!a.paid); const S=this.liveSum();
     const totVal=list.reduce((a,b)=>a+b.val,0);
     return h('div',null,
       this.kpiGrid([
         {label:'ใบตั้งหนี้รอจ่าย',val:this.fmtN(list.length),unit:'ใบ',c:this.RED,accent:this.RED},
         {label:'ยอดที่ต้องจ่าย',val:'฿'+this.fmtM(totVal),unit:this.unit(totVal),accent:this.AMBER,c:this.AMBER},
-        {label:'จ่ายแล้ว (สะสม)',val:this.fmtN(this.D.summary.apPaid),unit:'ใบ',c:this.GREEN,accent:this.GREEN},
-        {label:'รายการจ่ายทั้งหมด',val:this.fmtN(this.D.summary.payCount),unit:'ครั้ง',accent:this.BLUE}
+        {label:'จ่ายแล้ว (สะสม)',val:this.fmtN(S.apPaid),unit:'ใบ',c:this.GREEN,accent:this.GREEN},
+        {label:'รายการจ่ายทั้งหมด',val:this.fmtN(S.payCount),unit:'ครั้ง',accent:this.BLUE}
       ],4),
       this.card(h('div',null,
         h('div',{style:{padding:R.isMobile?'14px':'15px 18px',borderBottom:'1px solid '+this.LINE,fontSize:15,fontWeight:700}},'ใบตั้งหนี้ที่รอดำเนินการจ่าย'),
@@ -2119,16 +2119,20 @@ class Component extends DCLogic {
     (this.D.po||[]).forEach(p=>{ const g=byPo[p.doc]; if(g){ p.gd=g.docs.length; p.grl=g.docs.slice(0,6); } }); this.saveSapLocal(); this.persistSap('sap_po',this.D.po).then(db=>this.dbToast('GR',db)); return {n:docs,added:docs,upd:0,lines:lines}; }
   ingestAp(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[3]; if(!doc)continue;
       let o=m[doc]; if(!o){ o=m[doc]={doc,post:r[5]||'',vc:r[8]||'',vn:r[9]||'',dept:r[31]||'',base:r[37]||'',exp:r[47]||'',val:0,paid:false,payDate:'',payDoc:'',method:''}; } o.val+=num(r[25]); }
-    const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); const merged=this.mergeByKey(this.D.ap,arr,'doc'); this.D.ap=merged.list; this.linkApToPo(); this.saveSapLocal(); this.persistSap('sap_ap',arr).then(db=>this.dbToast('ใบตั้งหนี้',db)); return {n:arr.length,added:merged.added,upd:merged.upd}; }
-  ingestPay(rows,num){ const m={}; for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[4]; if(!doc)continue;
-      let o=m[doc]; if(!o){ o=m[doc]={doc,series:r[3]||'',post:r[5]||'',due:r[6]||'',vc:r[10]||'',vn:r[11]||'',total:num(r[15]),method:num(r[23])>0?'โอน':num(r[29])>0?'เช็ค':'เงินสด',invCount:0,purpose:r[39]||''}; } o.invCount++; }
+    const arr=Object.values(m).map(o=>{ o.val=Math.round(o.val); o.dn=this.deptName(o.dept); return o; }); const merged=this.mergeByKey(this.D.ap,arr,'doc'); this.D.ap=merged.list; this.linkApToPo(); this.linkPayToAp(); this.saveSapLocal(); this.persistSap('sap_ap',arr).then(db=>this.dbToast('ใบตั้งหนี้',db)); return {n:arr.length,added:merged.added,upd:merged.upd}; }
+  ingestPay(rows,num){ const m={}; const paidInv=Object.assign({},this.D.paidInv||{}); for(let i=1;i<rows.length;i++){ const r=rows[i]; const doc=r[4]; if(!doc)continue;
+      const method=num(r[23])>0?'โอน':num(r[29])>0?'เช็ค':'เงินสด';
+      const inv=String(r[33]||'').trim(); if(inv && !paidInv[inv]) paidInv[inv]={payDoc:doc,payDate:r[5]||'',method};
+      let o=m[doc]; if(!o){ o=m[doc]={doc,series:r[3]||'',post:r[5]||'',due:r[6]||'',vc:r[10]||'',vn:r[11]||'',total:num(r[15]),method,invCount:0,purpose:r[39]||''}; } o.invCount++; }
+    this.D.paidInv=paidInv;
     const arr=Object.values(m).map(o=>{ o.total=Math.round(o.total); return o; }); const merged=this.mergeByKey(this.D.pay,arr,'doc'); this.D.pay=merged.list; this.linkPayToAp(); this.saveSapLocal(); this.persistSap('sap_payment',arr).then(db=>this.dbToast('การจ่ายเงิน',db)); return {n:arr.length,added:merged.added,upd:merged.upd}; }
   // ---------- upsert helpers: กันซ้ำ + อัปเดตต่อยอดไปข้างหน้า ----------
   mergeByKey(existing,incoming,key){ const list=(existing||[]).slice(); const idx={}; list.forEach((o,i)=>{ idx[o[key]]=i; }); let added=0,upd=0;
     incoming.forEach(o=>{ const k=o[key]; if(k in idx){ list[idx[k]]=Object.assign({},list[idx[k]],o); upd++; } else { idx[k]=list.length; list.push(o); added++; } });
     return {list,added,upd}; }
   linkApToPo(){ const poByBase={}; (this.D.po||[]).forEach(p=>{ poByBase[p.doc]=p; }); (this.D.ap||[]).forEach(a=>{ const p=poByBase[a.base]; if(p){ p.ap=(p.ap||0)+1; } }); }
-  linkPayToAp(){ /* ยอดจ่ายผูกด้วยเลขผู้ขาย/เอกสาร — คำนวณสรุปในแดชบอร์ด */ }
+  linkPayToAp(){ const paidInv=this.D.paidInv||{}; let changed=0; (this.D.ap||[]).forEach(a=>{ const p=paidInv[a.doc]; const wasPaid=!!a.paid; if(p){ if(!wasPaid||a.payDoc!==p.payDoc){ a.paid=true; a.payDoc=p.payDoc; a.payDate=p.payDate; a.method=p.method; changed++; } } else if(wasPaid){ a.paid=false; a.payDoc=''; a.payDate=''; a.method=''; changed++; } });
+    if(changed){ this.saveSapLocal(); this.persistSap('sap_ap',this.D.ap).then(db=>{}); } }
   // ---------- persist SAP ลง Supabase แบบ upsert (กันซ้ำด้วย primary key doc) ----------
   async persistSap(table,rows){ const sb=this._sb; if(!sb||!this.state.online) return {ok:false,offline:true,count:0}; if(!rows||!rows.length) return {ok:true,count:0};
     try{ const map=r=>{ if(table==='sap_po') return {doc:r.doc,pf:r.pf,post:r.post,deliv:r.deliv,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,who:r.who,val:r.val,qty:r.qty,open:r.open,ln:r.ln,tr:r.tr,gd:r.gd||0,ap:r.ap||0,paid:r.paid||0,od:r.od||0,od_days:r.odDays||0,exp:r.exp,grl:r.grl||[]};
