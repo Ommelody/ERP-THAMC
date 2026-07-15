@@ -87,13 +87,10 @@ class Component extends DCLogic {
     const t=()=>{ if(window.ERPDATA){ this.D=window.ERPDATA; this.D.po=[]; this.D.ap=[]; this.D.pay=[]; this.loadSapLocal(); this.loadExps(); this.setState({ready:true,vw:this._winW(),page:this.roleHome('requester'),uploads:this._restoredUploads||{}}); this.loadDb(); } else setTimeout(t,60); };
     t();
   }
-  saveSapLocal(){ try{ localStorage.setItem('thamc_sap', JSON.stringify({po:this.D.po,ap:this.D.ap,pay:this.D.pay,budgetSap:this.D.budgetSap,paidInv:this.D.paidInv,uploads:this.state.uploads})); }catch(e){} }
-  loadSapLocal(){ try{ const s=localStorage.getItem('thamc_sap'); if(!s) return; const d=JSON.parse(s);
-    if(d.po&&d.po.length) this.D.po=d.po; if(d.ap&&d.ap.length) this.D.ap=d.ap; if(d.pay&&d.pay.length) this.D.pay=d.pay; if(d.paidInv) this.D.paidInv=d.paidInv;
-    if(d.budgetSap&&d.budgetSap.codes&&d.budgetSap.codes.length) this.D.budgetSap=d.budgetSap;
-    if(d.uploads) this._restoredUploads=d.uploads; }catch(e){} }
-  saveExps(){ try{ localStorage.setItem('thamc_exps', JSON.stringify(this.D.exps||[])); }catch(e){} }
-  loadExps(){ try{ const s=localStorage.getItem('thamc_exps'); if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length) this.D.exps=a; } }catch(e){} }
+  saveSapLocal(){ /* เลิกเก็บ localStorage — ข้อมูล SAP บันทึกลง Supabase ผ่าน persistSap เท่านั้น */ }
+  loadSapLocal(){ /* เลิกอ่าน cache ในเครื่อง — โหลด SAP จาก Supabase ผ่าน loadSap() แทน */ }
+  saveExps(){ const sb=this.initDb(); if(sb&&this.state.online){ /* ประเภทพัสดุเก็บใน app_config บน Supabase */ sb.from('app_config').upsert({k:'exps',v:this.D.exps||[]},{onConflict:'k'}).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
+  async loadExps(){ const sb=this.initDb(); if(sb&&this.state.online){ try{ const r=await sb.from('app_config').select('v').eq('k','exps').single(); if(r&&!r.error&&r.data&&Array.isArray(r.data.v)&&r.data.v.length){ this.D.exps=r.data.v; this.forceUpdate&&this.forceUpdate(); } }catch(e){} } }
   addExp(){ const v=(this.state.newExp||'').trim(); if(!v){ this.toastMsg('กรุณากรอกชื่อประเภทพัสดุ'); return; }
     if((this.D.exps||[]).includes(v)){ this.toastMsg('มีประเภทนี้อยู่แล้ว'); return; }
     this.D.exps=(this.D.exps||[]).concat([v]); this.saveExps(); this.setState({newExp:''}); this.toastMsg('เพิ่มประเภทพัสดุ "'+v+'" แล้ว'); }
@@ -207,15 +204,40 @@ class Component extends DCLogic {
 
   // ---------- auth ----------
   ACCOUNTS=[{u:'Admin',p:'Admin',role:'admin'},{u:'requester',p:'1234',role:'requester'},{u:'budget',p:'1234',role:'budget'},{u:'procure',p:'1234',role:'procurement'},{u:'finance',p:'1234',role:'finance'},{u:'exec',p:'1234',role:'exec'}];
-  login(){ const u=(this.state.loginU||'').trim(); const p=this.state.loginP||'';
+  // ออกเลขที่เอกสารแบบ atomic ผ่าน RPC (กันเลขซ้ำเมื่อหลายคนสร้างพร้อมกัน) — fallback เป็นตัวนับในเครื่องเมื่อ offline
+  async genDocId(kind){ const sb=this._sb; const ym=this.ymCode();
+    if(sb && this.state.online){ try{ const r=await sb.rpc('next_doc_id',{p_kind:kind,p_ym:ym}); if(r&&!r.error&&r.data) return r.data; }catch(e){} }
+    const arr=(kind==='PR'?this.state.pr:this.state.br)||[]; return kind+'-'+ym+'-'+('000'+(arr.length+1)).slice(-4); }
+  // ออกรหัสพัสดุแบบไม่ชน ผ่าน RPC — fallback เป็นเลขสุ่มเมื่อ offline
+  async genItemCode(){ const sb=this._sb;
+    if(sb && this.state.online){ try{ const r=await sb.rpc('next_item_code'); if(r&&!r.error&&r.data) return r.data; }catch(e){} }
+    return '81'+String(100000+Math.floor(Math.random()*899999)).slice(0,6); }
+  async login(){ const u=(this.state.loginU||'').trim(); const p=this.state.loginP||'';
+    const sb=this.initDb();
+    // (1) โหมดใช้งานจริง — ล็อกอินผ่าน Supabase Auth (username เป็นอีเมล) แล้วอ่าน role จากตาราง profiles
+    if(sb && sb.auth && u.indexOf('@')>=0){
+      try{ const res=await sb.auth.signInWithPassword({email:u,password:p});
+        if(!res.error && res.data && res.data.user){
+          let role='requester', name=u;
+          try{ const pr=await sb.from('profiles').select('role,name,active').eq('id',res.data.user.id).single();
+            if(pr&&pr.data){ if(pr.data.active===false){ await sb.auth.signOut(); this.setState({loginErr:'บัญชีนี้ถูกระงับการใช้งาน — ติดต่อผู้ดูแลระบบ'}); return; }
+              role=pr.data.role||'requester'; name=pr.data.name||u; } }catch(e){}
+          this._authEmail=u; this._authName=name;
+          let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
+          this.setState({authed:true,role,page: tp?'tracking':this.roleHome(role),loginErr:'',loginP:'',trackQ:tp||'',trackResult:tp||null});
+          this.toastMsg('เข้าสู่ระบบสำเร็จ · '+((this.ROLES.find(r=>r.k===role)||{}).label||role)); return; }
+        if(res.error){ this.setState({loginErr:'อีเมลหรือรหัสผ่านไม่ถูกต้อง'}); return; }
+      }catch(e){ this.setState({loginErr:'เชื่อมต่อระบบยืนยันตัวตนไม่สำเร็จ — ลองใหม่อีกครั้ง'}); return; }
+    }
+    // (2) โหมดสาธิต — ยังไม่ได้ตั้งค่า Supabase Auth ใช้บัญชีทดสอบในเครื่อง (username ธรรมดา ไม่ใช่อีเมล)
     const pool=(this.state.users&&this.state.users.length)? this.state.users.map(x=>({u:x.username,p:x.password,role:x.role,active:x.active!==false,name:x.name})) : this.ACCOUNTS.map(a=>({u:a.u,p:a.p,role:a.role,active:true}));
     let acc=pool.find(a=>a.u.toLowerCase()===u.toLowerCase()&&a.p===p);
     if(!acc && u.toLowerCase()==='admin' && p==='Admin') acc={u:'Admin',role:'admin',active:true};
     if(acc && acc.active===false){ this.setState({loginErr:'บัญชีนี้ถูกระงับการใช้งาน — ติดต่อผู้ดูแลระบบ'}); return; }
-    if(acc){ let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
+    if(acc){ this._authEmail=null; this._authName=acc.name||acc.u; let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
       this.setState({authed:true,role:acc.role,page: tp?'tracking':this.roleHome(acc.role),loginErr:'',loginP:'',trackQ:tp||'',trackResult:tp||null}); this.toastMsg('เข้าสู่ระบบสำเร็จ · '+this.ROLES.find(r=>r.k===acc.role).label); }
-    else this.setState({loginErr:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'}); }
-  logout(){ this.setState({authed:false,loginU:'',loginP:'',roleMenu:false,drawer:false}); }
+    else this.setState({loginErr:'ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง'}); }
+  logout(){ const sb=this._sb; if(sb&&sb.auth){ try{ sb.auth.signOut(); }catch(e){} } this._authEmail=null; this._authName=null; this.setState({authed:false,loginU:'',loginP:'',roleMenu:false,drawer:false}); }
   doInstall(){ const p=this._deferredPrompt;
     if(p){ p.prompt(); p.userChoice.finally(()=>{ this._deferredPrompt=null; this.setState({canInstall:false}); }); }
     else { const iOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -230,7 +252,7 @@ class Component extends DCLogic {
       h('div',{style:{display:'flex',justifyContent:'center',marginBottom:22}},h('img',{src:'assets/thamc_mark.jpg',alt:'THAMC',style:{height:R.isMobile?104:120,objectFit:'contain',maxWidth:'100%'}})),
       h('div',{style:{fontSize:21,fontWeight:700,letterSpacing:-.3}},'เข้าสู่ระบบ ERP'),
       h('div',{style:{fontSize:13,color:this.MUTE,marginTop:4,marginBottom:24}},'ระบบขออนุมัติจัดสรรงบ–จัดซื้อ ศูนย์การแพทย์ธรรมศาสตร์'),
-      field('ชื่อผู้ใช้ (Username)','loginU'),
+      field('อีเมล / ชื่อผู้ใช้','loginU'),
       field('รหัสผ่าน (Password)','loginP','password'),
       this.state.loginErr? h('div',{style:{background:this.REDBG,color:this.RED,fontSize:12.5,padding:'9px 13px',borderRadius:9,marginBottom:14,display:'flex',alignItems:'center',gap:7}},h('span',null,'⚠'),this.state.loginErr):null,
       h('button',{onClick:()=>this.login(),style:{width:'100%',padding:'13px',border:'none',borderRadius:11,background:this.TEAL,color:'#fff',fontSize:14.5,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 10px rgba(13,110,99,.3)'}},'เข้าสู่ระบบ'),
@@ -526,9 +548,9 @@ class Component extends DCLogic {
         : h('div',{style:{padding:'34px 20px',textAlign:'center',color:this.MUTE,fontSize:13}},'✓ ไม่มีรายการใกล้ครบกำหนดในบทบาทนี้')));
     return h('div',{onClick:close,style:{position:'fixed',inset:0,zIndex:75,background:R.isMobile?'rgba(10,25,22,.4)':'transparent',display:'flex',alignItems:R.isMobile?'flex-end':'flex-start',justifyContent:R.isMobile?'center':'flex-end',padding:R.isMobile?0:'72px 20px 0',animation:'overlayIn .12s'}}, body); }
   initDb(){ if(!this._sb && window.supabase){ try{ this._sb=window.supabase.createClient(this.SUPA_URL,this.SUPA_KEY); }catch(e){ this._sb=null; } } return this._sb; }
-  brToDb(b){ return {id:b.id,at:b.at,requester:b.requester,email:b.email||b.requester,dept:b.dept,dn:b.dn,tel:b.tel,pos:b.pos,item_name:b.itemName,reason:b.reason,qty:b.qty,unit:b.unit,value:b.value,needed_date:b.neededDate,cat:b.cat,proc_type:b.procType,med:!!b.med,has_code:!!b.hasCode,code:b.code||'',status:b.status,budget_type:b.budgetType,budget_name:b.budgetName,pr_id:b.prId||'',log:b.log||[]}; }
+  brToDb(b){ return {id:b.id,at:b.at,requester:b.requester,email:b.email||b.requester,owner_email:this._authEmail||b.email||null,dept:b.dept,dn:b.dn,tel:b.tel,pos:b.pos,item_name:b.itemName,reason:b.reason,qty:b.qty,unit:b.unit,value:b.value,needed_date:b.neededDate,cat:b.cat,proc_type:b.procType,med:!!b.med,has_code:!!b.hasCode,code:b.code||'',status:b.status,budget_type:b.budgetType,budget_name:b.budgetName,pr_id:b.prId||'',log:b.log||[]}; }
   brFromDb(r){ return {kind:'br',id:r.id,at:r.at,requester:r.requester,email:r.email,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,itemName:r.item_name,reason:r.reason,qty:Number(r.qty),unit:r.unit,value:Number(r.value),neededDate:r.needed_date,cat:r.cat,procType:r.proc_type,med:r.med,hasCode:r.has_code,code:r.code,status:r.status,budgetType:r.budget_type,budgetName:r.budget_name,prId:r.pr_id,log:r.log||[]}; }
-  prToDb(p){ return {id:p.id,br_id:p.brId,requester:p.requester,dept:p.dept,dn:p.dn,tel:p.tel,pos:p.pos,items:p.items,sub:p.sub,vat:p.vat,total:p.total,cat:p.cat,exp:p.exp,proc_type:p.procType,urgency:p.urgency,reason:p.reason,committee:p.committee,condition:p.condition||'',po:p.po||'',vendor:p.vendor||'',docs:p.docs||[],status:p.status,at:p.at,needed_date:p.neededDate,log:p.log||[]}; }
+  prToDb(p){ return {id:p.id,br_id:p.brId,requester:p.requester,owner_email:this._authEmail||null,dept:p.dept,dn:p.dn,tel:p.tel,pos:p.pos,items:p.items,sub:p.sub,vat:p.vat,total:p.total,cat:p.cat,exp:p.exp,proc_type:p.procType,urgency:p.urgency,reason:p.reason,committee:p.committee,condition:p.condition||'',po:p.po||'',vendor:p.vendor||'',docs:p.docs||[],status:p.status,at:p.at,needed_date:p.neededDate,log:p.log||[]}; }
   prFromDb(r){ return {kind:'pr',id:r.id,brId:r.br_id,requester:r.requester,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,items:r.items||[],sub:Number(r.sub),vat:Number(r.vat),total:Number(r.total),cat:r.cat,exp:r.exp,procType:r.proc_type,urgency:r.urgency,reason:r.reason,committee:r.committee||[],condition:r.condition,po:r.po,vendor:r.vendor,docs:r.docs||[],status:r.status,at:r.at,neededDate:r.needed_date,budgetCode:r.budget_code||'',log:r.log||[]}; }
   async loadDb(){
     const sb=this.initDb();
@@ -541,6 +563,7 @@ class Component extends DCLogic {
       this.toastMsg('เชื่อมต่อฐานข้อมูล Supabase สำเร็จ — พร้อมคีย์ข้อมูลจริง');
       this.setState({br:(br||[]).map(x=>this.brFromDb(x)), pr:(pr||[]).map(x=>this.prFromDb(x)), loaded:true, online:true});
       this.loadUsers(sb);
+      this.loadExps();
       this.loadSap(sb);
       this.syncItemPro(); this.startItemProPoll(); this.searchItemMaster(''); this.subscribeRealtime(sb);
     }catch(err){ console.warn('supabase load failed',err); this.toastMsg('ยังไม่ได้สร้างตารางใน Supabase — ใช้โหมดสาธิตชั่วคราว'); fallback(); }
@@ -592,10 +615,17 @@ class Component extends DCLogic {
       this.setState({sapOnline:!!(po&&po.length)}); if(po&&po.length) this.toastMsg('โหลดข้อมูล SAP จากฐานข้อมูลแล้ว ('+po.length+' PO · '+((ap&&ap.length)||0)+' ตั้งหนี้ · '+((pay&&pay.length)||0)+' จ่าย)');
     }catch(e){ console.warn('sap load',e); }
   }
-  persistBr(nb){ this.setState(s=>({br:s.br.map(b=>b.id===nb.id?nb:b)})); const sb=this._sb; if(sb&&this.state.online){ sb.from('budget_requests').update(this.brToDb(nb)).eq('id',nb.id).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
-  persistPr(np){ this.setState(s=>({pr:s.pr.map(p=>p.id===np.id?np:p)})); const sb=this._sb; if(sb&&this.state.online){ sb.from('purchase_requests').update(this.prToDb(np)).eq('id',np.id).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
-  insertBr(nb){ this.setState(s=>({br:s.br.concat([nb])})); const sb=this._sb; if(sb&&this.state.online){ sb.from('budget_requests').insert(this.brToDb(nb)).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
-  insertPr(np){ this.setState(s=>({pr:s.pr.concat([np])})); const sb=this._sb; if(sb&&this.state.online){ sb.from('purchase_requests').insert(this.prToDb(np)).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
+  persistBr(nb){ this.setState(s=>({br:s.br.map(b=>b.id===nb.id?nb:b)})); this._save('budget_requests','update',this.brToDb(nb),nb.id); }
+  persistPr(np){ this.setState(s=>({pr:s.pr.map(p=>p.id===np.id?np:p)})); this._save('purchase_requests','update',this.prToDb(np),np.id); }
+  insertBr(nb){ this.setState(s=>({br:s.br.concat([nb])})); this._save('budget_requests','insert',this.brToDb(nb),nb.id); }
+  insertPr(np){ this.setState(s=>({pr:s.pr.concat([np])})); this._save('purchase_requests','insert',this.prToDb(np),np.id); }
+  // เขียนลง Supabase จริงเสมอ — ถ้าบันทึกไม่สำเร็จจะแจ้งเตือนชัดเจน (ไม่เก็บลงเครื่อง)
+  async _save(table,op,row,id){ const sb=this.initDb();
+    if(!sb || !this.state.online){ this.toastMsg('⚠ ยังไม่ได้เชื่อมต่อฐานข้อมูล — ข้อมูล "'+id+'" ยังไม่ถูกบันทึก กรุณาเชื่อมต่อแล้วลองใหม่'); return false; }
+    try{ const q=op==='insert'? sb.from(table).insert(row) : sb.from(table).update(row).eq('id',id);
+      const r=await q; if(r&&r.error){ console.warn(r.error); this.toastMsg('⚠ บันทึกข้อมูล "'+id+'" ลงฐานข้อมูลไม่สำเร็จ: '+(r.error.message||r.error.code||'')); return false; }
+      return true;
+    }catch(e){ console.warn(e); this.toastMsg('⚠ บันทึกข้อมูล "'+id+'" ลงฐานข้อมูลไม่สำเร็จ'); return false; } }
 
   brs(){ return this.state.br||[]; }
   brById(id){ return this.brs().find(b=>b.id===id); }
@@ -670,7 +700,15 @@ class Component extends DCLogic {
     const items=(b.items&&b.items.length)? b.items.slice() : [{d:b.itemName,c:b.code||'',u:b.unit,qty:b.qty,price:Math.round(b.value/(b.qty||1)),total:b.value}];
     const draft={editId:b.id,requester:b.requester,dept:b.dept,dn:b.dn,tel:b.tel||'',pos:b.pos,reason:b.reason,cat:b.cat,budgetPlan:b.budgetPlan||this.sapPlans()[0],procType:b.procType||'ซื้อ',neededDate:b.neededDate,budgetType:b.budgetType||'งบดำเนินการ',budgetName:b.budgetName,budgetCode:b.budgetCode||'',items,docs:b.docs||[]};
     this.setState({brDraft:draft,page:'br-create',sel:null,drawer:false}); this.toastMsg('แก้ไขคำขอ '+b.id+' แล้วกดส่งใหม่'); window.scrollTo&&window.scrollTo(0,0); }
-  brAllocate(id,code){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'จัดสรรงบแล้ว',code:code,hasCode:true,log:(b.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code}])})); this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg('จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); }
+  async brAllocate(id,code){ const b=this.brById(id); if(!b)return; const sb=this._sb;
+    if(sb && this.state.online){ try{ const r=await sb.rpc('allocate_budget',{p_br_id:id,p_code:b.budgetCode||'',p_value:b.value||0,p_item_code:code||null});
+      if(r && r.data && r.data.ok===false){ this.toastMsg('จัดสรรงบไม่สำเร็จ: '+(r.data.msg||'งบคงเหลือไม่พอ')); return; }
+      if(r && !r.error && r.data && r.data.ok){
+        this.setState(s=>({br:s.br.map(x=>x.id===id?Object.assign({},x,{status:'จัดสรรงบแล้ว',code:code,hasCode:!!code,log:(x.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this._authName||this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code+' (ตัดงบผ่านฐานข้อมูล)'}])}):x)}));
+        this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg('จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); return; }
+    }catch(e){ console.warn('allocate_budget',e); } }
+    // fallback (โหมดสาธิต / RPC ยังไม่ได้ติดตั้ง)
+    this.persistBr(Object.assign({},b,{status:'จัดสรรงบแล้ว',code:code,hasCode:true,log:(b.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code}])})); this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg('จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); }
   brRequestCode(id){ const b=this.brById(id); if(!b)return;
     const payload={ br_id:id, item_name:b.itemName, qty:b.qty, unit:b.unit, dept:b.dept, dept_name:b.dn,
       budget_code:b.budgetCode||'', budget_plan:b.budgetPlan||'', value:b.value,
@@ -714,11 +752,11 @@ class Component extends DCLogic {
     const draft={brId:null,requester:u.name,dept,dn,tel:'',pos:'',vatMode:'excl',items:[{d:'',c:'',u:'ชิ้น',qty:1,price:0,total:0,rate:'',vat:true}],cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',exp:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',procType:'ซื้อ',urgency:'ปกติ',reason:'',committee:['','',''],neededDate:'',budgetName:'',code:''};
     this.setState({prDraft:draft,page:'pr-create',sel:null,drawer:false}); this.toastMsg('สร้างใบขอซื้อใหม่ — กรอกรายละเอียดให้ครบแล้วส่ง'); window.scrollTo&&window.scrollTo(0,0); }
   // ส่งใบขอซื้อ (PR) จากหน้าสร้างใบขอซื้อ
-  submitPr(draft){ if(draft.editId){ const ex=this.prById(draft.editId); if(ex){ const inc2=draft.vatMode==='incl'; const lt2=it=>it.vat?(inc2?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0; const s2=draft.items.reduce((a,it)=>a+((it.total||0)-(inc2?lt2(it):0)),0); const v2=draft.items.reduce((a,it)=>a+lt2(it),0);
+  async submitPr(draft){ if(draft.editId){ const ex=this.prById(draft.editId); if(ex){ const inc2=draft.vatMode==='incl'; const lt2=it=>it.vat?(inc2?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0; const s2=draft.items.reduce((a,it)=>a+((it.total||0)-(inc2?lt2(it):0)),0); const v2=draft.items.reduce((a,it)=>a+lt2(it),0);
       const prevVer=ex.ver||1; const versions=(ex.versions||[]).concat([{v:prevVer,at:this.now(),by:ex.requester,items:ex.items,sub:ex.sub,vat:ex.vat,total:ex.total,reason:ex.reason}]);
       this.persistPr(Object.assign({},ex,{items:draft.items,sub:s2,vat:v2,total:s2+v2,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,committee:(draft.committee||[]).filter(c=>c&&c.trim()),tel:draft.tel,neededDate:draft.neededDate,ver:prevVer+1,versions,status:'ยื่นเสนอซื้อ',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและส่งใบขอซื้อใหม่ (เวอร์ชัน '+(prevVer+1)+')',by:draft.requester,at:this.now(),note:'แก้ไขตามที่พัสดุแจ้ง — เก็บฉบับเดิมเป็นเวอร์ชัน '+prevVer}])})); }
       this.setState({prDraft:null,page:'my-requests',sel:draft.editId,selType:'pr'}); this.toastMsg('แก้ไขและส่งใบขอซื้อ '+draft.editId+' ใหม่แล้ว'); return; }
-    const id='PR-'+this.ymCode()+'-'+String(1000+(this.state.pr||[]).length+1).slice(1);
+    const id=await this.genDocId('PR');
     const inc=draft.vatMode==='incl'; const lt=it=>it.vat?(inc?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0;
     const sub=draft.items.reduce((a,it)=>a+((it.total||0)-(inc?lt(it):0)),0); const vat=draft.items.reduce((a,it)=>a+lt(it),0);
     const committee=(draft.committee||[]).filter(c=>c&&c.trim());
@@ -735,7 +773,7 @@ class Component extends DCLogic {
   addBrItem(){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,{items:(s.brDraft.items||[]).concat([{d:'',c:'',u:'',qty:1,price:0,total:0}])})})); }
   delBrItem(i){ this.setState(s=>{ const items=(s.brDraft.items||[]).slice(); items.splice(i,1); if(!items.length)items.push({d:'',c:'',u:'',qty:1,price:0,total:0}); return {brDraft:Object.assign({},s.brDraft,{items})}; }); }
   addBrDoc(){ const names=['ใบเสนอราคา.pdf','สเปคพัสดุ.pdf','ใบเปรียบเทียบราคา.pdf','หนังสือขออนุมัติ.pdf']; const cur=(this.state.brDraft.docs||[]); this.updBr({docs:cur.concat([names[cur.length%names.length]])}); }
-  submitBr(){ const d=this.state.brDraft; if(!d) return;
+  async submitBr(){ const d=this.state.brDraft; if(!d) return;
     if(!(d.items||[]).some(it=>it.d&&it.total>0)){ this.toastMsg('กรุณากรอกรายการที่ขออนุมัติอย่างน้อย 1 รายการ'); return; }
     if(!d.reason){ this.toastMsg('กรุณากรอกเหตุผล/ความจำเป็น'); return; }
     if(!d.neededDate){ this.toastMsg('กรุณาระบุวันที่ต้องการใช้'); return; }
@@ -743,7 +781,7 @@ class Component extends DCLogic {
     const bc=this.sapBudget(d.budgetCode); const catName=bc?(bc.name||d.cat):d.cat;
     if(d.editId){ const ex=this.brById(d.editId); if(ex){ this.persistBr(Object.assign({},ex,{requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',items:d.items.filter(it=>it.d),docs:d.docs||[],status:'รออนุมัติผู้บริหาร',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและยื่นใหม่',by:d.requester,at:this.now(),note:'แก้ไขรายละเอียดและส่งให้ผู้บริหารพิจารณาอีกครั้ง'}])})); }
       this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:d.editId}); this.toastMsg('แก้ไขและยื่นคำขอใหม่แล้ว — '+d.editId); window.scrollTo&&window.scrollTo(0,0); return; }
-    const id='BR-'+this.ymCode()+'-'+String(1000+(this.state.br||[]).length+1).slice(1);
+    const id=await this.genDocId('BR');
     const nb={kind:'br',id,at:this.now(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
     this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
   // พัสดุรับเรื่อง (เลือกเงื่อนไข)
@@ -2056,7 +2094,7 @@ class Component extends DCLogic {
   // ================= ITEM PRO API =================
   loadIcr(){ const sb=this._sb; if(!sb||!this.state.online){ this.setState({icrRows:[]}); return; }
     sb.from('item_code_requests').select('*').order('created_at',{ascending:false}).then(r=>{ if(!r||r.error){ this.setState({icrRows:[]}); return;} this.setState({icrRows:r.data||[]}); }); }
-  issueIcr(row){ const code=((this.state.icrInput||{})[row.id]||'').trim() || ('81'+String(100000+Math.floor(Math.random()*899999)).slice(0,6));
+  async issueIcr(row){ let code=((this.state.icrInput||{})[row.id]||'').trim(); if(!code) code=await this.genItemCode();
     const sb=this._sb; if(sb&&this.state.online){ sb.from('item_code_requests').update({status:'issued',code}).eq('id',row.id).then(()=>this.loadIcr()); }
     const b=this.brs().find(x=>x.id===row.br_id); if(b) this.brReceiveCode(b.id,code); else this.toastMsg('ออกรหัส '+code+' และส่งกลับผ่าน API แล้ว'); }
   pgItemPro(){
@@ -2113,18 +2151,25 @@ class Component extends DCLogic {
     {username:'finance',password:'1234',name:'สุภาพร เงินงาม',role:'finance',active:true},
     {username:'exec',password:'1234',name:'พญ.อรุณี วิสุทธิ์',role:'exec',active:true} ]; }
   async loadUsers(sb){ sb=sb||this._sb; if(!sb||!this.state.online){ this.setState({users:this.defaultUsers()}); return; }
+    // โหมดใช้งานจริง: อ่านรายชื่อผู้ใช้จากตาราง profiles (Supabase Auth) — ไม่มีรหัสผ่าน
+    if(this._authEmail){ try{ const r=await sb.from('profiles').select('email,name,role,active').order('email');
+      if(!r.error && r.data){ this.setState({users:r.data.map(p=>({username:p.email,name:p.name,role:p.role,active:p.active!==false,password:''}))}); return; } }catch(e){} }
+    // โหมดสาธิต: ตาราง app_users เดิม
     try{ const r=await sb.from('app_users').select('*').order('username'); if(r.error){ this.setState({users:this.defaultUsers()}); return; }
       if((r.data||[]).length===0){ await sb.from('app_users').insert(this.defaultUsers()); const r2=await sb.from('app_users').select('*').order('username'); this.setState({users:(r2.data||this.defaultUsers())}); }
       else this.setState({users:r.data}); }catch(e){ this.setState({users:this.defaultUsers()}); } }
   saveUser(u){ this.setState(s=>{ const users=(s.users||[]).slice(); const i=users.findIndex(x=>x.username===u.username); if(i>=0)users[i]=u; else users.push(u); return {users}; });
-    const sb=this._sb; if(sb&&this.state.online){ sb.from('app_users').upsert(u,{onConflict:'username'}).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
+    const sb=this._sb; if(sb&&this.state.online){
+      if(this._authEmail){ sb.from('profiles').update({role:u.role,active:u.active!==false,name:u.name}).eq('email',u.username).then(r=>{if(r&&r.error)console.warn(r.error);}); }
+      else sb.from('app_users').upsert(u,{onConflict:'username'}).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
   setUserRole(username,role){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{role})); this.toastMsg('เปลี่ยนสิทธิ์ '+username+' → '+(this.ROLES.find(r=>r.k===role)||{}).label); } }
   toggleUser(username){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{active:!(u.active!==false)})); } }
   delUser(username){ if(String(username).toLowerCase()==='admin'){ this.toastMsg('ลบบัญชีผู้ดูแลระบบไม่ได้'); return; }
     this.setState(s=>({users:(s.users||[]).filter(x=>x.username!==username)}));
-    const sb=this._sb; if(sb&&this.state.online){ sb.from('app_users').delete().eq('username',username).then(r=>{if(r&&r.error)console.warn(r.error);}); }
+    const sb=this._sb; if(sb&&this.state.online){ if(this._authEmail){ sb.from('profiles').update({active:false}).eq('email',username).then(r=>{if(r&&r.error)console.warn(r.error);}); } else sb.from('app_users').delete().eq('username',username).then(r=>{if(r&&r.error)console.warn(r.error);}); }
     this.toastMsg('ลบผู้ใช้ '+username+' แล้ว'); }
   addUser(){ const fm=this.state.userForm||{}; const un=(fm.username||'').trim(); if(!un||!fm.password){ this.toastMsg('กรอกชื่อผู้ใช้และรหัสผ่าน'); return; }
+    if(this._authEmail){ this.toastMsg('โหมดใช้งานจริง: เพิ่มผู้ใช้ใหม่ที่ Supabase → Authentication → Add user แล้วกำหนดสิทธิ์ (role) ที่นี่'); return; }
     if((this.state.users||[]).some(x=>x.username.toLowerCase()===un.toLowerCase())){ this.toastMsg('มีชื่อผู้ใช้นี้อยู่แล้ว'); return; }
     this.saveUser({username:un,password:fm.password,name:fm.name||un,role:fm.role||'requester',active:true});
     this.setState({userForm:{username:'',password:'',name:'',role:'requester'}}); this.toastMsg('เพิ่มผู้ใช้ '+un+' แล้ว'); }

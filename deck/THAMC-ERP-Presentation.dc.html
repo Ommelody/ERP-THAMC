@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'IBM Plex Sans Thai','IBM Plex Sans',sans-serif; }
+  section[data-label] { font-family: 'IBM Plex Sans Thai','IBM Plex Sans',sans-serif; color: #14201d; }
+  h1,h2,h3,p,ul,li { margin: 0; padding: 0; text-wrap: pretty; }
+  .eyebrow { font-size: 22px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: #0e6b5c; }
+  .kicker-num { font-family: 'IBM Plex Sans',sans-serif; font-weight: 700; }
+</style>
+</helmet>
+<x-import component-from-global-scope="deck-stage" from="./deck-stage.js" width="1920" height="1080" hint-size="100%,100%">
+
+  <section data-label="ปก" data-speaker-notes="เปิดด้วยชื่อระบบและวัตถุประสงค์: ขออนุมัติงบเพื่อขึ้นระบบจริง" style="width:100%;height:100%;background:#0e2d29;color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:110px 120px;position:relative;overflow:hidden;">
+    <div style="position:absolute;right:-160px;top:-160px;width:620px;height:620px;border-radius:50%;background:#0e6b5c;opacity:.25;"></div>
+    <div style="position:absolute;right:120px;bottom:-80px;width:0;height:0;border-left:130px solid transparent;border-right:130px solid transparent;border-bottom:230px solid #f4b400;opacity:.9;"></div>
+    <img src="./thamc_mark.jpg" alt="THAMC" style="width:150px;height:150px;object-fit:contain;border-radius:20px;background:#fff;padding:14px;">
+    <div style="display:flex;flex-direction:column;gap:28px;max-width:1250px;z-index:2;">
+      <div style="font-size:24px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#f4b400;">THAMC ERP · ศูนย์การแพทย์ธรรมศาสตร์</div>
+      <h1 style="font-size:88px;font-weight:700;line-height:1.05;">ระบบบริหารงบประมาณ<br>และการจัดซื้อจัดจ้าง</h1>
+      <p style="font-size:36px;font-weight:400;color:#cfe4df;max-width:1050px;">แพลตฟอร์มดิจิทัลครบวงจร ตั้งแต่การเสนอขออนุมัติงบ จนถึงการติดตามการจ่ายเงิน เชื่อมข้อมูลจริงจากระบบ SAP</p>
+    </div>
+    <div style="font-size:24px;color:#9fc4bd;z-index:2;">เอกสารประกอบการพิจารณาอนุมัติงบประมาณ · ปีงบประมาณ 2569</div>
+  </section>
+
+  <section data-label="ความท้าทาย" data-speaker-notes="อธิบายปัญหาเดิม: กระบวนการกระดาษ ล่าช้า ตรวจสอบยาก งบซ้ำซ้อน" style="width:100%;height:100%;background:#f6f4ef;display:flex;flex-direction:column;padding:100px 120px 80px;gap:56px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="eyebrow">ที่มาและความจำเป็น</div>
+      <h2 style="font-size:64px;font-weight:700;color:#0e2d29;">ความท้าทายของกระบวนการเดิม</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:36px;flex:1;">
+      <div style="background:#fff;border-radius:18px;padding:44px;display:flex;flex-direction:column;gap:18px;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div class="kicker-num" style="font-size:52px;color:#7d2230;">01</div>
+        <h3 style="font-size:32px;font-weight:600;color:#0e2d29;">เอกสารกระดาษหลายขั้นตอน</h3>
+        <p style="font-size:26px;color:#4a5a56;line-height:1.5;">คำขออนุมัติงบและใบขอซื้อเดินเอกสารด้วยมือ ใช้เวลานานและติดตามสถานะได้ยาก</p>
+      </div>
+      <div style="background:#fff;border-radius:18px;padding:44px;display:flex;flex-direction:column;gap:18px;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div class="kicker-num" style="font-size:52px;color:#7d2230;">02</div>
+        <h3 style="font-size:32px;font-weight:600;color:#0e2d29;">งบประมาณตรวจสอบยาก</h3>
+        <p style="font-size:26px;color:#4a5a56;line-height:1.5;">ยอดงบคงเหลือกระจายหลายแหล่ง เสี่ยงต่อการจัดสรรซ้ำซ้อนหรือเกินงบ</p>
+      </div>
+      <div style="background:#fff;border-radius:18px;padding:44px;display:flex;flex-direction:column;gap:18px;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div class="kicker-num" style="font-size:52px;color:#7d2230;">03</div>
+        <h3 style="font-size:32px;font-weight:600;color:#0e2d29;">ข้อมูลไม่เชื่อมกับ SAP</h3>
+        <p style="font-size:26px;color:#4a5a56;line-height:1.5;">สถานะการจัดซื้อ รับของ และจ่ายเงิน ต้องกระทบยอดด้วยมือกับระบบ SAP</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="ภาพรวมระบบ" data-speaker-notes="ระบบเดียวรวมทุกกระบวนการ ทำงานผ่านเบราว์เซอร์ ติดตั้งเป็นแอปได้" style="width:100%;height:100%;background:#fff;display:flex;padding:0;">
+    <div style="flex:1.05;display:flex;flex-direction:column;justify-content:center;gap:40px;padding:100px 90px;">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="eyebrow">ภาพรวมระบบ</div>
+        <h2 style="font-size:60px;font-weight:700;color:#0e2d29;line-height:1.1;">ระบบเดียว<br>ครบทั้งกระบวนการ</h2>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:26px;">
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+          <div style="width:14px;height:14px;border-radius:50%;background:#0e6b5c;margin-top:12px;flex-shrink:0;"></div>
+          <p style="font-size:29px;color:#2c3b38;line-height:1.45;"><b>รวมศูนย์ข้อมูล</b> — ทุกฝ่ายเห็นข้อมูลชุดเดียวกันแบบเรียลไทม์</p>
+        </div>
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+          <div style="width:14px;height:14px;border-radius:50%;background:#0e6b5c;margin-top:12px;flex-shrink:0;"></div>
+          <p style="font-size:29px;color:#2c3b38;line-height:1.45;"><b>ทำงานผ่านเบราว์เซอร์</b> — ไม่ต้องติดตั้ง ใช้ได้ทั้งคอมพิวเตอร์และมือถือ</p>
+        </div>
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+          <div style="width:14px;height:14px;border-radius:50%;background:#0e6b5c;margin-top:12px;flex-shrink:0;"></div>
+          <p style="font-size:29px;color:#2c3b38;line-height:1.45;"><b>เชื่อมข้อมูล SAP จริง</b> — ดึงสถานะจัดซื้อและการจ่ายเงินอัตโนมัติ</p>
+        </div>
+        <div style="display:flex;gap:20px;align-items:flex-start;">
+          <div style="width:14px;height:14px;border-radius:50%;background:#0e6b5c;margin-top:12px;flex-shrink:0;"></div>
+          <p style="font-size:29px;color:#2c3b38;line-height:1.45;"><b>ควบคุมงบอัตโนมัติ</b> — ตัดยอดและตรวจงบคงเหลือทันทีที่จัดสรร</p>
+        </div>
+      </div>
+    </div>
+    <div style="flex:.95;background:url('./tu_building.jpg') center/cover;"></div>
+  </section>
+
+  <section data-label="กระบวนการ" data-speaker-notes="ไล่ 5 ขั้น: เสนอขออนุมัติงบ → จัดสรรงบ → ใบขอซื้อ → จัดซื้อ/รับของ → จ่ายเงิน" style="width:100%;height:100%;background:#0e2d29;color:#fff;display:flex;flex-direction:column;padding:100px 110px 90px;gap:64px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="font-size:22px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#f4b400;">กระบวนการทำงาน</div>
+      <h2 style="font-size:60px;font-weight:700;">จากคำขอ สู่การจ่ายเงิน ในระบบเดียว</h2>
+    </div>
+    <div style="display:flex;align-items:stretch;gap:0;flex:1;">
+      <div style="flex:1;display:flex;flex-direction:column;gap:18px;padding:0 22px;">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">BR</div>
+        <div style="height:4px;background:#0e6b5c;border-radius:2px;"></div>
+        <h3 style="font-size:29px;font-weight:600;">เสนอขออนุมัติงบ</h3>
+        <p style="font-size:23px;color:#b7d1cb;line-height:1.45;">ผู้ขอสร้างคำขอ ระบุรายการและวงเงิน</p>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:18px;padding:0 22px;border-left:1px solid rgba(255,255,255,.12);">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">จัดสรร</div>
+        <div style="height:4px;background:#0e6b5c;border-radius:2px;"></div>
+        <h3 style="font-size:29px;font-weight:600;">อนุมัติ + ตัดงบ</h3>
+        <p style="font-size:23px;color:#b7d1cb;line-height:1.45;">ตรวจงบคงเหลือ ตัดยอด และออกรหัสพัสดุ</p>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:18px;padding:0 22px;border-left:1px solid rgba(255,255,255,.12);">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">PR</div>
+        <div style="height:4px;background:#0e6b5c;border-radius:2px;"></div>
+        <h3 style="font-size:29px;font-weight:600;">ใบขอซื้อ</h3>
+        <p style="font-size:23px;color:#b7d1cb;line-height:1.45;">แปลงคำขอเป็นใบขอซื้อพร้อมรายละเอียด</p>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:18px;padding:0 22px;border-left:1px solid rgba(255,255,255,.12);">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">PO / GR</div>
+        <div style="height:4px;background:#0e6b5c;border-radius:2px;"></div>
+        <h3 style="font-size:29px;font-weight:600;">จัดซื้อ + รับของ</h3>
+        <p style="font-size:23px;color:#b7d1cb;line-height:1.45;">ผูกเลข PO และติดตามการรับของ</p>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:18px;padding:0 22px;border-left:1px solid rgba(255,255,255,.12);">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">จ่ายเงิน</div>
+        <div style="height:4px;background:#0e6b5c;border-radius:2px;"></div>
+        <h3 style="font-size:29px;font-weight:600;">ตรวจการจ่าย</h3>
+        <p style="font-size:23px;color:#b7d1cb;line-height:1.45;">กระทบยอดกับ SAP จนปิดงาน</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="บทบาทผู้ใช้" data-speaker-notes="6 บทบาท แต่ละบทบาทเห็นและทำได้เฉพาะงานของตน ควบคุมสิทธิ์ที่ระดับฐานข้อมูล" style="width:100%;height:100%;background:#f6f4ef;display:flex;flex-direction:column;padding:100px 120px 80px;gap:50px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="eyebrow">บทบาทและสิทธิ์การใช้งาน</div>
+      <h2 style="font-size:60px;font-weight:700;color:#0e2d29;">หกบทบาท แต่ละฝ่ายทำเฉพาะงานของตน</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:28px;flex:1;">
+      <div style="background:#fff;border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:12px;border-top:6px solid #0e6b5c;">
+        <h3 style="font-size:30px;font-weight:700;color:#0e2d29;">ผู้ขอ</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.45;">สร้างคำขอ BR/PR และติดตามสถานะคำขอของตน</p>
+      </div>
+      <div style="background:#fff;border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:12px;border-top:6px solid #0e6b5c;">
+        <h3 style="font-size:30px;font-weight:700;color:#0e2d29;">เจ้าหน้าที่งบประมาณ</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.45;">ตรวจและจัดสรรงบ ตัดยอด ออกรหัสพัสดุ</p>
+      </div>
+      <div style="background:#fff;border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:12px;border-top:6px solid #7d2230;">
+        <h3 style="font-size:30px;font-weight:700;color:#0e2d29;">ผู้บริหาร</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.45;">อนุมัติงบ และดูภาพรวมทั้งองค์กร</p>
+      </div>
+      <div style="background:#fff;border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:12px;border-top:6px solid #f4b400;">
+        <h3 style="font-size:30px;font-weight:700;color:#0e2d29;">จัดซื้อ</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.45;">ดำเนินการจัดซื้อ ผูก PO ติดตามการรับของ</p>
+      </div>
+      <div style="background:#fff;border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:12px;border-top:6px solid #f4b400;">
+        <h3 style="font-size:30px;font-weight:700;color:#0e2d29;">การเงิน</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.45;">ตรวจสอบการจ่ายเงินและกระทบยอดกับ SAP</p>
+      </div>
+      <div style="background:#fff;border-radius:16px;padding:36px;display:flex;flex-direction:column;gap:12px;border-top:6px solid #14201d;">
+        <h3 style="font-size:30px;font-weight:700;color:#0e2d29;">ผู้ดูแลระบบ</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.45;">จัดการผู้ใช้ สิทธิ์ และนำเข้าข้อมูล SAP</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="ควบคุมงบ" data-speaker-notes="จุดขายสำคัญต่อผู้บริหาร: กันงบติดลบด้วยการตัดยอดแบบ atomic และออกเลขไม่ซ้ำ" style="width:100%;height:100%;background:#fff;display:flex;flex-direction:column;padding:100px 120px 80px;gap:56px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="eyebrow">การควบคุมงบประมาณ</div>
+      <h2 style="font-size:60px;font-weight:700;color:#0e2d29;">งบประมาณควบคุมได้ ตรวจสอบได้ทุกบาท</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:40px;flex:1;">
+      <div style="background:#0e2d29;color:#fff;border-radius:20px;padding:52px;display:flex;flex-direction:column;justify-content:center;gap:20px;">
+        <h3 style="font-size:36px;font-weight:700;color:#f4b400;">ตัดงบทันที กันงบติดลบ</h3>
+        <p style="font-size:28px;color:#cfe4df;line-height:1.5;">ตรวจงบคงเหลือและตัดยอดในขั้นตอนเดียว แม้เจ้าหน้าที่หลายคนจัดสรรพร้อมกันก็ไม่เกิดงบซ้ำซ้อน</p>
+      </div>
+      <div style="background:#f6f4ef;border-radius:20px;padding:52px;display:flex;flex-direction:column;justify-content:center;gap:20px;">
+        <h3 style="font-size:36px;font-weight:700;color:#7d2230;">เลขเอกสารไม่ซ้ำ</h3>
+        <p style="font-size:28px;color:#4a5a56;line-height:1.5;">ระบบออกเลขคำขอและใบขอซื้ออัตโนมัติแบบเรียงลำดับ ป้องกันเลขชนกันเมื่อใช้งานพร้อมกันหลายคน</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="เชื่อม SAP" data-speaker-notes="ระบบไม่แทนที่ SAP แต่ทำงานร่วม ดึง PO/GR/AP/การจ่ายเข้ามาแสดงผลและกระทบยอด" style="width:100%;height:100%;background:#f6f4ef;display:flex;flex-direction:column;padding:100px 120px 80px;gap:56px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="eyebrow">การเชื่อมต่อข้อมูล</div>
+      <h2 style="font-size:60px;font-weight:700;color:#0e2d29;">ทำงานร่วมกับ SAP ไม่ใช่แทนที่</h2>
+    </div>
+    <div style="display:flex;gap:30px;align-items:center;flex:1;">
+      <div style="flex:1;background:#fff;border-radius:16px;padding:44px;text-align:center;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div style="font-size:34px;font-weight:700;color:#0e2d29;">SAP</div>
+        <p style="font-size:24px;color:#4a5a56;margin-top:12px;">ข้อมูลตั้งต้น: PO · รับของ · ตั้งหนี้ · การจ่าย · งบ</p>
+      </div>
+      <div style="font-size:52px;color:#0e6b5c;font-weight:700;">→</div>
+      <div style="flex:1.1;background:#0e6b5c;color:#fff;border-radius:16px;padding:44px;text-align:center;">
+        <div style="font-size:34px;font-weight:700;">THAMC ERP</div>
+        <p style="font-size:24px;color:#dff0ec;margin-top:12px;">รวมข้อมูล แสดงสถานะ และกระทบยอดอัตโนมัติ</p>
+      </div>
+      <div style="font-size:52px;color:#0e6b5c;font-weight:700;">→</div>
+      <div style="flex:1;background:#fff;border-radius:16px;padding:44px;text-align:center;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div style="font-size:34px;font-weight:700;color:#0e2d29;">ผู้ใช้งาน</div>
+        <p style="font-size:24px;color:#4a5a56;margin-top:12px;">เห็นสถานะจริงของทุกคำขอ ตั้งแต่ต้นจนจ่ายเงิน</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="สถาปัตยกรรม" data-speaker-notes="สรุปเทคโนโลยี: React SPA + PWA / Supabase (PostgreSQL) คลาวด์ / นำเข้า SAP ผ่าน Excel" style="width:100%;height:100%;background:#0e2d29;color:#fff;display:flex;flex-direction:column;padding:100px 120px 80px;gap:56px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="font-size:22px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#f4b400;">สถาปัตยกรรมระบบ</div>
+      <h2 style="font-size:60px;font-weight:700;">สร้างด้วยเทคโนโลยีมาตรฐานสากล</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:34px;flex:1;">
+      <div style="background:rgba(255,255,255,.06);border-radius:18px;padding:44px;display:flex;flex-direction:column;gap:16px;">
+        <div style="font-size:24px;font-weight:600;color:#f4b400;">ส่วนหน้า (Frontend)</div>
+        <h3 style="font-size:34px;font-weight:700;">React · PWA</h3>
+        <p style="font-size:25px;color:#b7d1cb;line-height:1.5;">เว็บแอปหน้าเดียว ติดตั้งเป็นแอปบนมือถือ/เดสก์ท็อปได้ รองรับทุกหน้าจอ</p>
+      </div>
+      <div style="background:rgba(255,255,255,.06);border-radius:18px;padding:44px;display:flex;flex-direction:column;gap:16px;">
+        <div style="font-size:24px;font-weight:600;color:#f4b400;">ฐานข้อมูล (Backend)</div>
+        <h3 style="font-size:34px;font-weight:700;">Supabase · PostgreSQL</h3>
+        <p style="font-size:25px;color:#b7d1cb;line-height:1.5;">ฐานข้อมูลบนคลาวด์ รวมศูนย์ พร้อมระบบยืนยันตัวตนและควบคุมสิทธิ์ในตัว</p>
+      </div>
+      <div style="background:rgba(255,255,255,.06);border-radius:18px;padding:44px;display:flex;flex-direction:column;gap:16px;">
+        <div style="font-size:24px;font-weight:600;color:#f4b400;">การเชื่อมต่อ</div>
+        <h3 style="font-size:34px;font-weight:700;">นำเข้า SAP (Excel)</h3>
+        <p style="font-size:25px;color:#b7d1cb;line-height:1.5;">นำเข้ารายงาน SAP เข้าฐานข้อมูลกลาง ค้นหารหัสพัสดุแบบเรียลไทม์</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="ความปลอดภัย" data-speaker-notes="ตอบข้อกังวลผู้บริหารเรื่องความปลอดภัยข้อมูลการเงินราชการ" style="width:100%;height:100%;background:#fff;display:flex;flex-direction:column;padding:100px 120px 80px;gap:56px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="eyebrow">ความปลอดภัยและการกำกับ</div>
+      <h2 style="font-size:60px;font-weight:700;color:#0e2d29;">ออกแบบเพื่อข้อมูลการเงินราชการ</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:34px;flex:1;">
+      <div style="display:flex;flex-direction:column;gap:16px;padding:20px 8px;">
+        <div style="width:64px;height:64px;border-radius:14px;background:#0e6b5c;"></div>
+        <h3 style="font-size:31px;font-weight:700;color:#0e2d29;">ยืนยันตัวตนจริง</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.5;">เข้าระบบด้วยอีเมลและรหัสผ่านที่เข้ารหัส ผ่านระบบยืนยันตัวตนมาตรฐาน</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;padding:20px 8px;">
+        <div style="width:64px;height:64px;border-radius:14px;background:#7d2230;"></div>
+        <h3 style="font-size:31px;font-weight:700;color:#0e2d29;">สิทธิ์ระดับฐานข้อมูล</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.5;">จำกัดการเข้าถึงข้อมูลตามบทบาท ตรวจสอบที่ชั้นฐานข้อมูล ไม่ใช่แค่หน้าจอ</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;padding:20px 8px;">
+        <div style="width:64px;height:64px;border-radius:14px;background:#f4b400;"></div>
+        <h3 style="font-size:31px;font-weight:700;color:#0e2d29;">บันทึกประวัติทุกขั้น</h3>
+        <p style="font-size:25px;color:#4a5a56;line-height:1.5;">ทุกการดำเนินการเก็บผู้ทำและเวลา ตรวจสอบย้อนหลังได้เต็มรูปแบบ</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="ประโยชน์" data-speaker-notes="สรุปคุณค่าเชิงบริหารเป็นตัวเลข/ผลลัพธ์ที่จับต้องได้" style="width:100%;height:100%;background:#f6f4ef;display:flex;flex-direction:column;padding:100px 120px 80px;gap:56px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="eyebrow">คุณค่าต่อองค์กร</div>
+      <h2 style="font-size:60px;font-weight:700;color:#0e2d29;">ประโยชน์ที่ได้รับ</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:36px;flex:1;">
+      <div style="background:#fff;border-radius:18px;padding:48px;display:flex;flex-direction:column;justify-content:center;gap:14px;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div style="font-size:64px;font-weight:700;color:#0e6b5c;" class="kicker-num">100%</div>
+        <p style="font-size:27px;color:#2c3b38;line-height:1.45;">กระบวนการเป็นดิจิทัล ลดเอกสารกระดาษ</p>
+      </div>
+      <div style="background:#fff;border-radius:18px;padding:48px;display:flex;flex-direction:column;justify-content:center;gap:14px;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div style="font-size:64px;font-weight:700;color:#0e6b5c;" class="kicker-num">Real-time</div>
+        <p style="font-size:27px;color:#2c3b38;line-height:1.45;">ติดตามสถานะทุกคำขอได้ทันที ทุกฝ่าย</p>
+      </div>
+      <div style="background:#fff;border-radius:18px;padding:48px;display:flex;flex-direction:column;justify-content:center;gap:14px;box-shadow:0 2px 20px rgba(14,45,41,.06);">
+        <div style="font-size:64px;font-weight:700;color:#0e6b5c;" class="kicker-num">0</div>
+        <p style="font-size:27px;color:#2c3b38;line-height:1.45;">ความเสี่ยงงบซ้ำซ้อนจากการควบคุมอัตโนมัติ</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-label="สถานะ + ขออนุมัติ" data-speaker-notes="ปิดการนำเสนอ: ระบบพร้อมขึ้นจริง เหลือขั้นตอน hardening ที่ระบุ ขออนุมัติงบดำเนินการ" style="width:100%;height:100%;background:#0e2d29;color:#fff;display:flex;flex-direction:column;justify-content:space-between;padding:110px 120px 90px;position:relative;overflow:hidden;">
+    <div style="position:absolute;right:-140px;bottom:-140px;width:520px;height:520px;border-radius:50%;background:#0e6b5c;opacity:.22;"></div>
+    <div style="display:flex;flex-direction:column;gap:16px;z-index:2;">
+      <div style="font-size:22px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#f4b400;">สถานะและขั้นตอนถัดไป</div>
+      <h2 style="font-size:64px;font-weight:700;">ระบบพร้อมขึ้นใช้งานจริง</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:34px;z-index:2;">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">พัฒนาเสร็จแล้ว</div>
+        <p style="font-size:25px;color:#cfe4df;line-height:1.5;">ครบทุกฟังก์ชันหลัก และเชื่อมข้อมูล SAP</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">เตรียมขึ้นจริง</div>
+        <p style="font-size:25px;color:#cfe4df;line-height:1.5;">ตั้งค่าความปลอดภัยและระบบยืนยันตัวตนสำหรับผู้ใช้จริง</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:30px;font-weight:700;color:#f4b400;">ขออนุมัติ</div>
+        <p style="font-size:25px;color:#cfe4df;line-height:1.5;">งบดำเนินการเพื่อเปิดใช้งานและดูแลระบบต่อเนื่อง</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:24px;z-index:2;">
+      <img src="./thamc_mark.jpg" alt="THAMC" style="width:70px;height:70px;object-fit:contain;border-radius:12px;background:#fff;padding:8px;">
+      <div style="font-size:26px;color:#9fc4bd;">THAMC ERP · ศูนย์การแพทย์ธรรมศาสตร์ · ปีงบประมาณ 2569</div>
+    </div>
+  </section>
+
+</x-import>
+</x-dc>
+</body>
+</html>

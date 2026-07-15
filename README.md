@@ -18,6 +18,7 @@
 | `assets/thamc_logo.jpg` | หัวกระดาษราชการ (ใช้บนเอกสาร BR/PR) |
 | `supabase-schema.sql` | สคริปต์สร้างตาราง BR/PR + เปิดสิทธิ์ (รันก่อน) |
 | `supabase-seed-sap.sql` | สคริปต์โหลดข้อมูล SAP จาก Excel ลงฐานข้อมูล (รันทีหลัง) |
+| `supabase-hardening.sql` | **สคริปต์เตรียมขึ้นระบบจริง** — ผูก Auth จริง + ปิดสิทธิ์ anon + RPC ออกเลขเอกสาร/ตัดงบแบบ atomic (รันสุดท้าย ก่อนเปิดใช้จริง) |
 
 ---
 
@@ -74,3 +75,25 @@ SUPA_KEY='<anon public key>';
 
 สคริปต์ SQL เปิด Row Level Security แบบอนุญาต `anon` อ่าน/เขียนได้ (เหมาะกับช่วง **นำร่อง/ทดลอง**)
 ก่อนใช้งานจริงจัง ควรผูกกับระบบยืนยันตัวตน (Supabase Auth) และปรับ policy ให้จำกัดตาม `auth.uid()` / บทบาทผู้ใช้
+
+---
+
+## เตรียมขึ้นระบบจริง (Production hardening)
+
+รัน `supabase-hardening.sql` เป็นสคริปต์สุดท้าย (หลัง schema + seed) แล้วทำตามนี้:
+
+1. **สร้างผู้ดูแลคนแรก** — Supabase → Authentication → Users → **Add user** (ใส่ email + password จริง)
+   ระบบจะสร้างแถวใน `profiles` ให้อัตโนมัติ (role=requester) จากนั้นรันใน SQL Editor:
+   ```sql
+   update public.profiles set role='admin', name='ผู้ดูแลระบบ'
+     where email = 'admin@your-domain.com';
+   ```
+2. **ล็อกอินด้วยอีเมล** — หน้า login รองรับ 2 โหมดอัตโนมัติ: กรอก **อีเมล** = เข้าผ่าน Supabase Auth จริง (อ่าน role จาก `profiles`), กรอก **ชื่อผู้ใช้ธรรมดา** = โหมดสาธิตเดิม (บัญชีทดสอบในเครื่อง)
+3. **เพิ่มผู้ใช้จริง** — ผ่าน Authentication → Add user แล้วแอดมินกำหนด role/เปิด-ปิดใช้งานผ่านหน้า "จัดการผู้ใช้" ในแอป (เขียนลง `profiles`)
+4. **ลบตารางรหัสผ่านเดิม** — เมื่อย้ายผู้ใช้ครบแล้ว เอาคอมเมนต์ออกจากบรรทัด `drop table ... app_users;` ในสคริปต์แล้วรัน
+
+สิ่งที่ `supabase-hardening.sql` + โค้ดเวอร์ชันนี้แก้ให้:
+- ปิดสิทธิ์ `anon` ทุกตาราง → เข้าถึงได้เฉพาะผู้ล็อกอิน + ตาม role (`is_role()`)
+- ออกเลขที่ BR/PR ผ่าน RPC `next_doc_id` แบบ atomic (กันเลขซ้ำเมื่อใช้พร้อมกัน)
+- จัดสรร/ตัดงบผ่าน RPC `allocate_budget` ในทรานแซกชันเดียว (กันงบติดลบจาก race condition)
+- ออกรหัสพัสดุผ่าน RPC `next_item_code` (กันรหัสชน) และแจ้งเตือนเมื่อ localStorage เต็ม
