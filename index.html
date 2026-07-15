@@ -420,10 +420,10 @@ class Component extends DCLogic {
         h('div',{style:{display:'flex',flexDirection:'column',gap:8}},
           (this.state.role==='admin'?this.ROLES:this.ROLES.filter(r=>r.k===this.state.role)).map(r=>{ const active=r.k===this.state.role;
             return h('div',{key:r.k,onClick:()=>{ if(this.state.role==='admin')this.switchRole(r.k); },style:{display:'flex',alignItems:'center',gap:12,padding:'12px 13px',borderRadius:12,cursor:this.state.role==='admin'?'pointer':'default',border:'1.5px solid '+(active?this.TEAL:this.LINE),background:active?'#f0f8f6':'#fff'}},
-              h('div',{style:{width:38,height:38,borderRadius:'50%',background:active?this.TEAL:'#e7edeb',color:active?'#fff':this.MUTE,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:13}},r.user.init),
+              h('div',{style:{width:38,height:38,borderRadius:'50%',background:active?this.TEAL:'#e7edeb',color:active?'#fff':this.MUTE,display:'flex',alignItems:'center',justifyContent:'center',fontWeight:700,fontSize:13}},(active?this.role().user:r.user).init),
               h('div',{style:{flex:1,minWidth:0}},
                 h('div',{style:{fontSize:13.5,fontWeight:600}},r.label),
-                h('div',{style:{fontSize:11.5,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.user.name+' · '+r.user.sub)),
+                h('div',{style:{fontSize:11.5,color:this.MUTE,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},(active?this.role().user:r.user).name+' · '+(active?this.role().user:r.user).sub)),
               active? h('span',{style:{color:this.TEAL,fontWeight:700}},'✓'):null); })),
         h('button',{onClick:()=>this.logout(),style:{width:'100%',marginTop:16,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:11,fontSize:13.5,color:this.RED,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:8}},h('span',null,'⎋'),'ออกจากระบบ')));
   }
@@ -2161,16 +2161,19 @@ class Component extends DCLogic {
     {username:'exec',password:'1234',name:'พญ.อรุณี วิสุทธิ์',role:'exec',active:true} ]; }
   async loadUsers(sb){ sb=sb||this._sb; if(!sb||!this.state.online){ this.setState({users:this.defaultUsers()}); return; }
     // โหมดใช้งานจริง: อ่านรายชื่อผู้ใช้จากตาราง profiles (Supabase Auth) — ไม่มีรหัสผ่าน
-    if(this._authEmail){ try{ const r=await sb.from('profiles').select('email,name,role,active').order('email');
-      if(!r.error && r.data){ this.setState({users:r.data.map(p=>({username:p.email,name:p.name,role:p.role,active:p.active!==false,password:''}))}); return; } }catch(e){} }
+    if(this._authEmail){ try{ const r=await sb.from('profiles').select('email,name,role,active,dept,dept_name,pos,tel').order('email');
+      if(!r.error && r.data){ this.setState({users:r.data.map(p=>({username:p.email,name:p.name,role:p.role,active:p.active!==false,dept:p.dept||'',deptName:p.dept_name||'',pos:p.pos||'',tel:p.tel||'',password:''}))}); return; } }catch(e){} }
     // โหมดสาธิต: ตาราง app_users เดิม
     try{ const r=await sb.from('app_users').select('*').order('username'); if(r.error){ this.setState({users:this.defaultUsers()}); return; }
       if((r.data||[]).length===0){ await sb.from('app_users').insert(this.defaultUsers()); const r2=await sb.from('app_users').select('*').order('username'); this.setState({users:(r2.data||this.defaultUsers())}); }
       else this.setState({users:r.data}); }catch(e){ this.setState({users:this.defaultUsers()}); } }
   saveUser(u){ this.setState(s=>{ const users=(s.users||[]).slice(); const i=users.findIndex(x=>x.username===u.username); if(i>=0)users[i]=u; else users.push(u); return {users}; });
     const sb=this._sb; if(sb&&this.state.online){
-      if(this._authEmail){ sb.from('profiles').update({role:u.role,active:u.active!==false,name:u.name}).eq('email',u.username).then(r=>{if(r&&r.error)console.warn(r.error);}); }
+      if(this._authEmail){ sb.from('profiles').update({role:u.role,active:u.active!==false,name:u.name,dept:u.dept||null,dept_name:u.deptName||null,pos:u.pos||null,tel:u.tel||null}).eq('email',u.username).then(r=>{if(r&&r.error){console.warn(r.error);this.toastMsg('⚠ บันทึกไม่สำเร็จ: '+(r.error.message||''));}}); }
       else sb.from('app_users').upsert(u,{onConflict:'username'}).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
+  openEditUser(username){ const u=(this.state.users||[]).find(x=>x.username===username); if(u) this.setState({editUser:Object.assign({},u)}); }
+  updEditUser(patch){ this.setState(s=>({editUser:Object.assign({},s.editUser,patch)})); }
+  saveEditUser(){ const eu=this.state.editUser; if(!eu) return; this.saveUser(Object.assign({},eu)); this.setState({editUser:null}); this.toastMsg('บันทึกข้อมูลผู้ใช้ '+eu.username+' แล้ว'); }
   setUserRole(username,role){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{role})); this.toastMsg('เปลี่ยนสิทธิ์ '+username+' → '+(this.ROLES.find(r=>r.k===role)||{}).label); } }
   toggleUser(username){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{active:!(u.active!==false)})); } }
   delUser(username){ if(String(username).toLowerCase()==='admin'){ this.toastMsg('ลบบัญชีผู้ดูแลระบบไม่ได้'); return; }
@@ -2368,23 +2371,58 @@ class Component extends DCLogic {
       this.card(h('div',null,
         h('div',{style:{padding:R.isMobile?'14px':'15px 18px',borderBottom:'1px solid '+this.LINE,fontSize:15,fontWeight:700}},'บัญชีผู้ใช้งาน'),
         h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?620:'auto'}},
-          h('div',{style:{display:'grid',gridTemplateColumns:'150px 1fr 170px 110px 90px',padding:'10px 18px',background:this.PANEL,fontSize:11,fontWeight:600,color:this.MUTE,textTransform:'uppercase'}},
-            h('div',null,'ชื่อผู้ใช้'),h('div',null,'ชื่อ-นามสกุล'),h('div',null,'สิทธิ์ (บทบาท)'),h('div',{style:{textAlign:'center'}},'สถานะ'),h('div',{style:{textAlign:'center'}},'จัดการ')),
-          users.map(u=>h('div',{key:u.username,style:{display:'grid',gridTemplateColumns:'150px 1fr 170px 110px 90px',padding:'11px 18px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center'}},
-            h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600}},u.username),
-            h('div',{style:{minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},u.name||'—'),
+          h('div',{style:{display:'grid',gridTemplateColumns:'170px 1fr 170px 110px 130px',padding:'10px 18px',background:this.PANEL,fontSize:11,fontWeight:600,color:this.MUTE,textTransform:'uppercase'}},
+            h('div',null,'อีเมล / ชื่อผู้ใช้'),h('div',null,'ชื่อ-หน่วยงาน'),h('div',null,'สิทธิ์ (บทบาท)'),h('div',{style:{textAlign:'center'}},'สถานะ'),h('div',{style:{textAlign:'center'}},'จัดการ')),
+          users.map(u=>h('div',{key:u.username,style:{display:'grid',gridTemplateColumns:'170px 1fr 170px 110px 130px',padding:'11px 18px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center'}},
+            h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},u.username),
+            h('div',{style:{minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},h('div',null,u.name||'—'),(u.deptName||u.dept)?h('div',{style:{fontSize:11,color:this.MUTE}},[u.deptName,u.dept].filter(Boolean).join(' · ')):null),
             h('select',{value:u.role,disabled:String(u.username).toLowerCase()==='admin',onChange:e=>this.setUserRole(u.username,e.target.value),style:{width:'100%',fontSize:12,border:'1px solid '+this.LINE,borderRadius:8,padding:'6px 8px',background:'#fff',cursor:'pointer'}},
               roleOpts.map(rk=>h('option',{key:rk,value:rk},(this.ROLES.find(r=>r.k===rk)||{}).label))),
             h('div',{style:{textAlign:'center'}}, h('span',{onClick:()=>this.toggleUser(u.username),style:{cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:20,background:u.active!==false?this.GREENBG:this.PANEL,color:u.active!==false?this.GREEN:this.MUTE,fontSize:11.5,fontWeight:600}},h('span',{style:{width:6,height:6,borderRadius:'50%',background:u.active!==false?this.GREEN:this.FADE}}),u.active!==false?'ใช้งาน':'ระงับ')),
-            h('div',{style:{textAlign:'center'}}, String(u.username).toLowerCase()==='admin'? h('span',{style:{fontSize:11,color:this.FADE}},'—') : h('span',{onClick:()=>this.delUser(u.username),style:{cursor:'pointer',color:this.RED,fontSize:12,fontWeight:600}},'ลบ')))))) ),{marginBottom:16}),
+            h('div',{style:{textAlign:'center',display:'flex',gap:12,justifyContent:'center'}},
+              h('span',{onClick:()=>this.openEditUser(u.username),style:{cursor:'pointer',color:this.TEAL,fontSize:12,fontWeight:600}},'แก้ไข'),
+              String(u.username).toLowerCase()==='admin'? null : h('span',{onClick:()=>this.delUser(u.username),style:{cursor:'pointer',color:this.RED,fontSize:12,fontWeight:600}},'ลบ')))))) ),{marginBottom:16}),
+      this._authEmail? this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
+        this.secTitle('เพิ่มผู้ใช้ใหม่','โหมดใช้งานจริง'),
+        h('div',{style:{fontSize:12.5,color:this.MUTE,lineHeight:1.7,marginBottom:12}},'การเพิ่มบัญชีเข้าสู่ระบบ (ตั้งอีเมล/รหัสผ่าน) ต้องทำที่ Supabase เพื่อความปลอดภัย จากนั้นผู้ใช้จะปรากฏในตารางด้านบนให้แอดมินกำหนดสิทธิ์/หน่วยงานได้ทันที'),
+        h('ol',{style:{margin:0,paddingLeft:20,fontSize:12.5,color:this.INK,lineHeight:1.9}},
+          h('li',null,'เปิด Supabase → Authentication → Users → กด ',h('b',null,'Add user'),' → ใส่อีเมล + รหัสผ่าน → ติ๊ก Auto Confirm'),
+          h('li',null,'กลับมาที่หน้านี้ กด ',h('b',null,'รีเฟรช'),' — ผู้ใช้ใหม่จะขึ้นในตาราง (สิทธิ์เริ่มต้น: ผู้ขอซื้อ)'),
+          h('li',null,'กด ',h('b',{style:{color:this.TEAL}},'แก้ไข'),' ที่แถวนั้นเพื่อกำหนดชื่อ หน่วยงาน ตำแหน่ง และสิทธิ์')),
+        h('div',{style:{marginTop:14,display:'flex',gap:10,flexWrap:'wrap'}},
+          h('a',{href:'https://supabase.com/dashboard/project/_/auth/users',target:'_blank',rel:'noreferrer',style:{padding:'10px 18px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13,fontWeight:600,textDecoration:'none'}},'เปิด Supabase Authentication ↗'),
+          h('button',{onClick:()=>this.loadUsers(),style:{padding:'10px 18px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'↻ รีเฟรชรายชื่อ')))) :
       this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
-        this.secTitle('เพิ่มผู้ใช้ใหม่'),
+        this.secTitle('เพิ่มผู้ใช้ใหม่','โหมดสาธิต'),
         h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr 1fr 1fr auto',gap:12,alignItems:'end'}},
           h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'ชื่อผู้ใช้'),h('input',{value:fm.username||'',onChange:e=>upd({username:e.target.value}),placeholder:'username',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,outline:'none'}})),
           h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'รหัสผ่าน'),h('input',{value:fm.password||'',onChange:e=>upd({password:e.target.value}),placeholder:'password',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,outline:'none'}})),
           h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'ชื่อ-นามสกุล'),h('input',{value:fm.name||'',onChange:e=>upd({name:e.target.value}),placeholder:'ชื่อ นามสกุล',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,outline:'none'}})),
           h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'สิทธิ์'),h('select',{value:fm.role||'requester',onChange:e=>upd({role:e.target.value}),style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,background:'#fff',cursor:'pointer'}},roleOpts.filter(r=>r!=='admin').map(rk=>h('option',{key:rk,value:rk},(this.ROLES.find(r=>r.k===rk)||{}).label)))),
-          h('button',{onClick:()=>this.addUser(),style:{padding:'11px 20px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap'}},'＋ เพิ่มผู้ใช้')))));
+          h('button',{onClick:()=>this.addUser(),style:{padding:'11px 20px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap'}},'＋ เพิ่มผู้ใช้')))),
+      this.editUserModal());
+  }
+  editUserModal(){ const h=React.createElement; const R=this.R; const eu=this.state.editUser; if(!eu) return null;
+    const roleOpts=this.ROLES.map(r=>r.k); const isAdmin=String(eu.username).toLowerCase()==='admin';
+    const close=()=>this.setState({editUser:null});
+    const fld=(label,key,ph)=>h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},label),h('input',{value:eu[key]||'',onChange:e=>this.updEditUser({[key]:e.target.value}),placeholder:ph||'',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,outline:'none',boxSizing:'border-box'}}));
+    return h('div',{onClick:close,style:{position:'fixed',inset:0,zIndex:90,background:'rgba(10,25,22,.45)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
+      h('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:16,width:R.isMobile?'100%':560,maxWidth:'100%',maxHeight:'90vh',overflow:'auto',padding:'26px 28px'}},
+        h('div',{style:{fontSize:17,fontWeight:700,marginBottom:2}},'แก้ไขข้อมูลผู้ใช้'),
+        h('div',{style:{fontSize:12.5,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace",marginBottom:18}},eu.username),
+        h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr',gap:14}},
+          fld('ชื่อ-นามสกุล','name','ชื่อ นามสกุล'),
+          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'สิทธิ์ (บทบาท)'),h('select',{value:eu.role,disabled:isAdmin,onChange:e=>this.updEditUser({role:e.target.value}),style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13.5,background:'#fff',cursor:isAdmin?'default':'pointer',boxSizing:'border-box'}},roleOpts.map(rk=>h('option',{key:rk,value:rk},(this.ROLES.find(r=>r.k===rk)||{}).label)))),
+          fld('รหัสหน่วยงาน','dept','เช่น 13ORD'),
+          fld('ชื่อหน่วยงาน','deptName','เช่น ห้องผ่าตัด'),
+          fld('ตำแหน่ง','pos','เช่น พยาบาลวิชาชีพ'),
+          fld('เบอร์ติดต่อ','tel','02-xxx-xxxx')),
+        h('div',{style:{display:'flex',alignItems:'center',gap:10,marginTop:16}},
+          h('span',{onClick:()=>this.updEditUser({active:!(eu.active!==false)}),style:{cursor:isAdmin?'default':'pointer',display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',borderRadius:20,background:eu.active!==false?this.GREENBG:this.PANEL,color:eu.active!==false?this.GREEN:this.MUTE,fontSize:12.5,fontWeight:600}},h('span',{style:{width:7,height:7,borderRadius:'50%',background:eu.active!==false?this.GREEN:this.FADE}}),eu.active!==false?'ใช้งานอยู่':'ระงับใช้งาน'),
+          isAdmin?h('span',{style:{fontSize:11.5,color:this.MUTE}},'บัญชีผู้ดูแลระบบ — เปลี่ยนสิทธิ์/ระงับไม่ได้'):null),
+        h('div',{style:{display:'flex',gap:10,justifyContent:'flex-end',marginTop:24}},
+          h('button',{onClick:close,style:{padding:'11px 22px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:13.5,cursor:'pointer',fontWeight:600}},'ยกเลิก'),
+          h('button',{onClick:()=>this.saveEditUser(),style:{padding:'11px 24px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13.5,cursor:'pointer',fontWeight:600}},'บันทึก')))); 
   }
 
   docModal2(){
