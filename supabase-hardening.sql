@@ -21,27 +21,23 @@ create table if not exists public.profiles (
   email      text,
   name       text,
   role       text default 'requester',   -- admin | requester | budget | procurement | finance | exec
-  dept       text,
+  dept       text,                        -- รหัสหน่วยงาน เช่น 13ORD
+  dept_name  text,                        -- ชื่อหน่วยงาน เช่น ห้องผ่าตัด
+  pos        text,                        -- ตำแหน่ง
+  tel        text,                        -- เบอร์ติดต่อ
   active     boolean default true,
   created_at timestamptz default now()
 );
+-- เผื่อรันซ้ำบนฐานที่มีตาราง profiles เดิมอยู่แล้ว — เติมคอลัมน์ให้ครบ
+ alter table public.profiles add column if not exists dept      text;
+alter table public.profiles add column if not exists dept_name text;
+alter table public.profiles add column if not exists pos       text;
+alter table public.profiles add column if not exists tel       text;
 
 alter table public.profiles enable row level security;
 
--- ทุกคนที่ล็อกอินแล้วอ่าน profile ของตัวเองได้ / admin อ่านได้ทุกคน
-drop policy if exists "profiles self read" on public.profiles;
-create policy "profiles self read" on public.profiles
-  for select to authenticated
-  using ( id = auth.uid() or public.is_role(array['admin']) );
-
--- แก้ไข profile ได้เฉพาะ admin (กันผู้ใช้เลื่อนสิทธิ์ตัวเอง)
-drop policy if exists "profiles admin write" on public.profiles;
-create policy "profiles admin write" on public.profiles
-  for all to authenticated
-  using ( public.is_role(array['admin']) )
-  with check ( public.is_role(array['admin']) );
-
 -- ---------- helper: เช็ค role ของผู้ใช้ปัจจุบัน ----------
+-- ⚠ ต้องสร้างฟังก์ชันก่อน policy ที่เรียกใช้ มิฉะนั้นจะ error "function does not exist"
 -- SECURITY DEFINER = อ่านตาราง profiles ได้โดยไม่ติด RLS ของ profiles เอง
 create or replace function public.is_role(roles text[])
 returns boolean
@@ -64,6 +60,19 @@ as $$
   select role from public.profiles where id = auth.uid() and active = true;
 $$;
 
+-- ทุกคนที่ล็อกอินแล้วอ่าน profile ของตัวเองได้ / admin อ่านได้ทุกคน
+drop policy if exists "profiles self read" on public.profiles;
+create policy "profiles self read" on public.profiles
+  for select to authenticated
+  using ( id = auth.uid() or public.is_role(array['admin']) );
+
+-- แก้ไข profile ได้เฉพาะ admin (กันผู้ใช้เลื่อนสิทธิ์ตัวเอง)
+drop policy if exists "profiles admin write" on public.profiles;
+create policy "profiles admin write" on public.profiles
+  for all to authenticated
+  using ( public.is_role(array['admin']) )
+  with check ( public.is_role(array['admin']) );
+
 -- ---------- สร้าง profile อัตโนมัติเมื่อมีผู้ใช้ Auth ใหม่ ----------
 create or replace function public.handle_new_user()
 returns trigger
@@ -71,12 +80,16 @@ language plpgsql security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, name, role)
+  insert into public.profiles (id, email, name, role, dept, dept_name, pos, tel)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'name', new.email),
-    coalesce(new.raw_user_meta_data->>'role', 'requester')
+    coalesce(new.raw_user_meta_data->>'role', 'requester'),
+    new.raw_user_meta_data->>'dept',
+    new.raw_user_meta_data->>'dept_name',
+    new.raw_user_meta_data->>'pos',
+    new.raw_user_meta_data->>'tel'
   )
   on conflict (id) do nothing;
   return new;
@@ -359,6 +372,12 @@ grant execute on function public.allocate_budget(text, text, numeric, text) to a
 --
 -- update public.profiles set role='admin', name='ผู้ดูแลระบบ'
 --   where email = 'admin@example.com';
+--
+-- ตัวอย่างกำหนดข้อมูลผู้ขอซื้อ (หน่วยงาน/ตำแหน่ง/เบอร์ติดต่อ) ให้ผู้ใช้แต่ละคน:
+-- update public.profiles
+--   set role='requester', name='กมลวรรณ ศรีสุข',
+--       dept='13ORD', dept_name='ห้องผ่าตัด', pos='พยาบาลวิชาชีพ', tel='02-xxx-xxxx'
+--   where email = 'user@example.com';
 --
 -- จากนั้นผู้ดูแลล็อกอินแล้วเพิ่มผู้ใช้/กำหนด role คนอื่นผ่านหน้า "จัดการผู้ใช้" ได้
 -- ============================================================

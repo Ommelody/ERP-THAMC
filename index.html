@@ -218,11 +218,11 @@ class Component extends DCLogic {
     if(sb && sb.auth && u.indexOf('@')>=0){
       try{ const res=await sb.auth.signInWithPassword({email:u,password:p});
         if(!res.error && res.data && res.data.user){
-          let role='requester', name=u;
-          try{ const pr=await sb.from('profiles').select('role,name,active').eq('id',res.data.user.id).single();
+          let role='requester', name=u, prof=null;
+          try{ const pr=await sb.from('profiles').select('role,name,active,dept,dept_name,pos,tel').eq('id',res.data.user.id).single();
             if(pr&&pr.data){ if(pr.data.active===false){ await sb.auth.signOut(); this.setState({loginErr:'บัญชีนี้ถูกระงับการใช้งาน — ติดต่อผู้ดูแลระบบ'}); return; }
-              role=pr.data.role||'requester'; name=pr.data.name||u; } }catch(e){}
-          this._authEmail=u; this._authName=name;
+              role=pr.data.role||'requester'; name=pr.data.name||u; prof=pr.data; } }catch(e){}
+          this._authEmail=u; this._authName=name; this._authProfile=prof;
           let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
           this.setState({authed:true,role,page: tp?'tracking':this.roleHome(role),loginErr:'',loginP:'',trackQ:tp||'',trackResult:tp||null});
           this.toastMsg('เข้าสู่ระบบสำเร็จ · '+((this.ROLES.find(r=>r.k===role)||{}).label||role)); return; }
@@ -237,7 +237,7 @@ class Component extends DCLogic {
     if(acc){ this._authEmail=null; this._authName=acc.name||acc.u; let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
       this.setState({authed:true,role:acc.role,page: tp?'tracking':this.roleHome(acc.role),loginErr:'',loginP:'',trackQ:tp||'',trackResult:tp||null}); this.toastMsg('เข้าสู่ระบบสำเร็จ · '+this.ROLES.find(r=>r.k===acc.role).label); }
     else this.setState({loginErr:'ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง'}); }
-  logout(){ const sb=this._sb; if(sb&&sb.auth){ try{ sb.auth.signOut(); }catch(e){} } this._authEmail=null; this._authName=null; this.setState({authed:false,loginU:'',loginP:'',roleMenu:false,drawer:false}); }
+  logout(){ const sb=this._sb; if(sb&&sb.auth){ try{ sb.auth.signOut(); }catch(e){} } this._authEmail=null; this._authName=null; this._authProfile=null; this.setState({authed:false,loginU:'',loginP:'',roleMenu:false,drawer:false}); }
   doInstall(){ const p=this._deferredPrompt;
     if(p){ p.prompt(); p.userChoice.finally(()=>{ this._deferredPrompt=null; this.setState({canInstall:false}); }); }
     else { const iOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -767,7 +767,10 @@ class Component extends DCLogic {
     this.insertPr(pr); if(draft.brId){ const b=this.brById(draft.brId); if(b) this.persistBr(Object.assign({},b,{prId:id})); }
     this.setState({prDraft:null,page:'my-requests',sel:id,selType:'pr'}); this.toastMsg('สร้างใบขอซื้อ '+id+' และส่งงานพัสดุแล้ว'); }
   // ส่งคำขออนุมัติจัดสรรงบ (BR) จากฟอร์มที่คีย์เอง
-  newBrDraft(){ const p0=this.sapPlans()[0]||''; const c0=(this.sapCodesForPlan(p0)[0]||{}).exp||''; return {requester:this.role().user.name,dept:'13ORD',dn:this.D.deptNames['13ORD']||'กลุ่มการพยาบาล',tel:'',pos:this.role().user.sub,reason:'',cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',budgetPlan:p0,procType:'ซื้อ',neededDate:'',budgetType:'งบดำเนินการ',budgetName:'',budgetCode:c0,items:[{d:'',c:'',u:'',qty:1,price:0,total:0}],docs:[]}; }
+  newBrDraft(){ const p0=this.sapPlans()[0]||''; const c0=(this.sapCodesForPlan(p0)[0]||{}).exp||''; const rk=this.state.role; const isReq=rk==='requester'; const pf=this._authProfile;
+    let dept=isReq?'13ORD':'', dn=isReq?(this.D.deptNames['13ORD']||'กลุ่มการพยาบาล'):this.role().label, pos=this.role().user.sub, tel='';
+    if(pf){ dept=pf.dept||dept; dn=pf.dept_name||dn; pos=pf.pos||pos; tel=pf.tel||''; }
+    return {requester:this._authName||this.role().user.name,dept,dn,tel,pos,reason:'',cat:(this.D.exps&&this.D.exps[0])||'ค่าวัสดุการแพทย์',budgetPlan:p0,procType:'ซื้อ',neededDate:'',budgetType:'งบดำเนินการ',budgetName:'',budgetCode:c0,items:[{d:'',c:'',u:'',qty:1,price:0,total:0}],docs:[]}; }
   updBr(patch){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,patch)})); }
   updBrItem(i,patch){ this.setState(s=>{ const items=(s.brDraft.items||[]).slice(); items[i]=Object.assign({},items[i],patch); if('qty' in patch||'price' in patch) items[i].total=(+items[i].qty||0)*(+items[i].price||0); return {brDraft:Object.assign({},s.brDraft,{items})}; }); }
   addBrItem(){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,{items:(s.brDraft.items||[]).concat([{d:'',c:'',u:'',qty:1,price:0,total:0}])})})); }
