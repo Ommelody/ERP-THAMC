@@ -116,7 +116,13 @@ class Component extends DCLogic {
     {k:'finance',label:'การเงิน',sub:'จ่ายเงิน',user:{name:'สุภาพร เงินงาม',sub:'งานการเงิน',init:'สง'}},
     {k:'exec',label:'ผู้บริหาร',sub:'อนุมัติ/ภาพรวม',user:{name:'พญ.อรุณี วิสุทธิ์',sub:'ผู้อำนวยการ',init:'อว'}}
   ];
-  role(){ return this.ROLES.find(r=>r.k===this.state.role); }
+  role(){ const base=this.ROLES.find(r=>r.k===this.state.role); if(!base) return base;
+    // โหมด Auth จริง: แทนที่ชื่อ/หน่วยงาน/อักษรย่อ ด้วยข้อมูลผู้ใช้ที่ล็อกอินจริง (ไม่ใช้บทบาทสมมุติ)
+    if(this._authName){ const pf=this._authProfile||{}; const name=this._authName;
+      const sub=[pf.dept_name,pf.dept].filter(Boolean).join(' · ')||pf.pos||base.user.sub;
+      const init=(name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join(''))||base.user.init;
+      return Object.assign({},base,{user:Object.assign({},base.user,{name,sub,init})}); }
+    return base; }
   roleHome(rk){ return {admin:'overview',requester:'my-requests',budget:'br-allocate',procurement:'pr-queue',finance:'pay-track',exec:'br-approval'}[rk]||'overview'; }
 
   NAV=[
