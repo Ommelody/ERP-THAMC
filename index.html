@@ -63,8 +63,18 @@ class Component extends DCLogic {
     br:[], pr:[], loaded:false, online:false, sapOnline:false, notifOpen:false,
     authed:false, loginU:'', loginP:'', loginErr:'', prDraft:null,
     icrRows:[], icrInput:{}, users:[], userForm:{username:'',password:'',name:'',role:'requester'}, brDraft:null, confirm:null,
-    canInstall:false, notifBefore:{lo:7,hi:30}, uploads:{}
+    canInstall:false, notifBefore:{lo:7,hi:30}, uploads:{}, curFy:null, editUser:null
   };
+  // ---------- ปีงบประมาณราชการ (เริ่ม 1 ต.ค. / พ.ศ.) ----------
+  fyOfDate(d){ if(!d) return null; const by=d.getFullYear()+543; return d.getMonth()>=9? by+1 : by; }
+  fyNow(){ return this.fyOfDate(new Date()); }
+  fyOfThai(s){ const d=this.parseThai(s); return d? this.fyOfDate(d) : null; }
+  curFy(){ return this.state.curFy || this.fyNow(); }
+  fyList(){ const set={}; (this.state.br||[]).forEach(b=>{ const f=b.fy||this.fyOfThai(b.at); if(f)set[f]=1; });
+    (this.state.pr||[]).forEach(p=>{ const f=p.fy||this.fyOfThai(p.at); if(f)set[f]=1; });
+    ((this.D&&this.D.budgetSap&&this.D.budgetSap.codes)||[]).forEach(c=>{ if(c.fy)set[c.fy]=1; });
+    set[this.fyNow()]=1; return Object.keys(set).map(Number).sort((a,b)=>b-a); }
+  inFy(rec){ const f=rec.fy||this.fyOfThai(rec.at); return f==null || f===this.curFy(); }
   SUPA_URL='https://hkqyeeonfyzlbnimztuz.supabase.co';  SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXllZW9uZnl6bGJuaW16dHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODU4NDMsImV4cCI6MjA5OTI2MTg0M30.Od-n8yNuIWu6Kx1Y_mW6Aemg3TRCxZG5ooTESpOgZBE';
   ITEMPRO_API='';  // (ตัวเลือก) URL ปลายทาง REST ของโปรแกรม Item Master Pro เช่น https://itempro.example/api/code-request — เว้นว่างได้ ระบบจะใช้ตาราง item_code_requests บน Supabase เป็นช่องทาง
   ITEMPRO_KEY='';  // (ตัวเลือก) API key/token สำหรับ Item Pro
@@ -84,7 +94,7 @@ class Component extends DCLogic {
       window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); this._deferredPrompt=e; this.setState({canInstall:true}); });
       window.addEventListener('appinstalled',()=>{ this._deferredPrompt=null; this.setState({canInstall:false}); this.toastMsg&&this.toastMsg('ติดตั้งแอปสำเร็จ'); });
     }catch(e){}
-    const t=()=>{ if(window.ERPDATA){ this.D=window.ERPDATA; this.D.po=[]; this.D.ap=[]; this.D.pay=[]; this.loadSapLocal(); this.loadExps(); this.setState({ready:true,vw:this._winW(),page:this.roleHome('requester'),uploads:this._restoredUploads||{}}); this.loadDb(); } else setTimeout(t,60); };
+    const t=()=>{ if(window.ERPDATA){ this.D=window.ERPDATA; this.D.po=[]; this.D.ap=[]; this.D.pay=[]; this.loadSapLocal(); this.loadExps(); this.setState({ready:true,vw:this._winW(),page:this.roleHome('requester'),uploads:this._restoredUploads||{},curFy:this.fyNow()}); this.loadDb(); } else setTimeout(t,60); };
     t();
   }
   saveSapLocal(){ /* เลิกเก็บ localStorage — ข้อมูล SAP บันทึกลง Supabase ผ่าน persistSap เท่านั้น */ }
@@ -362,9 +372,10 @@ class Component extends DCLogic {
       h('div',{onClick:()=>{this.toastMsg('กำลังเชื่อมต่อฐานข้อมูล…');this.loadDb();},title:'สถานะฐานข้อมูล — คลิกเพื่อเชื่อมต่อใหม่',style:{display:'flex',alignItems:'center',gap:7,padding:'6px 12px',border:'1px solid '+(this.state.online?'#bfe3d6':this.LINE),borderRadius:22,background:this.state.online?this.GREENBG:'#fff',cursor:'pointer'}},
         h('span',{style:{width:8,height:8,borderRadius:'50%',background:this.state.online?this.GREEN:this.AMBER}}),
         h('span',{style:{fontSize:11.5,fontWeight:600,color:this.state.online?this.GREEN:this.AMBER}},this.state.online?'เชื่อมต่อ Supabase':'โหมดสาธิต')),
-      h('div',{style:{display:'flex',alignItems:'center',gap:10,padding:'5px 12px 5px 8px',border:'1px solid '+this.LINE,borderRadius:22,background:'#fff'}},
+      h('div',{style:{display:'flex',alignItems:'center',gap:8,padding:'4px 8px 4px 12px',border:'1px solid '+this.LINE,borderRadius:22,background:'#fff'}},
         h('span',{style:{fontSize:11,color:this.MUTE}},'ปีงบ'),
-        h('span',{style:{fontSize:12.5,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace",color:this.INK}},'2569')),
+        h('select',{value:this.curFy(),onChange:e=>this.setState({curFy:Number(e.target.value)}),title:'เลือกปีงบประมาณ',style:{border:'none',outline:'none',background:'transparent',fontSize:12.5,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace",color:this.INK,cursor:'pointer'}},
+          this.fyList().map(f=>h('option',{key:f,value:f},f)))),
       this.refreshBtn(),
       this.notifBell(),
       h('div',{onClick:()=>this.setState({roleMenu:true}),style:{display:'flex',alignItems:'center',gap:10,cursor:'pointer',padding:'5px 6px 5px 14px',borderRadius:26,border:'1px solid '+this.LINE,background:'#fff'}},
@@ -376,7 +387,7 @@ class Component extends DCLogic {
 
   pageTitle(){ const m={
     'overview':{t:'ภาพรวมระบบจัดซื้อ–งบประมาณ–จ่ายเงิน',s:'สถานะรวมทุกขั้นตอน เชื่อมข้อมูลจริงจาก SAP'},
-    'dash-budget':{t:'แดชบอร์ดงบประมาณ',s:'การใช้งบตามหน่วยงานและหมวดรายจ่าย · ปีงบ 2569'},
+    'dash-budget':{t:'แดชบอร์ดงบประมาณ',s:'การใช้งบตามหน่วยงานและหมวดรายจ่าย'},
     'dash-procure':{t:'แดชบอร์ดการจัดซื้อ',s:'กระบวนการ PR → PO → รับของ ทั้งระบบ'},
     'dash-cost':{t:'วิเคราะห์ต้นทุน (ค่าใช้จ่ายจริง)',s:'ค่าใช้จ่ายที่จ่ายจริงตามประเภทและหน่วยงาน · ปีงบ 2569'},
     'dash-payment':{t:'แดชบอร์ดการจ่ายเงิน',s:'สถานะตั้งหนี้และการจ่ายเงินให้ผู้ขาย'},
@@ -554,10 +565,10 @@ class Component extends DCLogic {
         : h('div',{style:{padding:'34px 20px',textAlign:'center',color:this.MUTE,fontSize:13}},'✓ ไม่มีรายการใกล้ครบกำหนดในบทบาทนี้')));
     return h('div',{onClick:close,style:{position:'fixed',inset:0,zIndex:75,background:R.isMobile?'rgba(10,25,22,.4)':'transparent',display:'flex',alignItems:R.isMobile?'flex-end':'flex-start',justifyContent:R.isMobile?'center':'flex-end',padding:R.isMobile?0:'72px 20px 0',animation:'overlayIn .12s'}}, body); }
   initDb(){ if(!this._sb && window.supabase){ try{ this._sb=window.supabase.createClient(this.SUPA_URL,this.SUPA_KEY); }catch(e){ this._sb=null; } } return this._sb; }
-  brToDb(b){ return {id:b.id,at:b.at,requester:b.requester,email:b.email||b.requester,owner_email:this._authEmail||b.email||null,dept:b.dept,dn:b.dn,tel:b.tel,pos:b.pos,item_name:b.itemName,reason:b.reason,qty:b.qty,unit:b.unit,value:b.value,needed_date:b.neededDate,cat:b.cat,proc_type:b.procType,med:!!b.med,has_code:!!b.hasCode,code:b.code||'',status:b.status,budget_type:b.budgetType,budget_name:b.budgetName,pr_id:b.prId||'',log:b.log||[]}; }
-  brFromDb(r){ return {kind:'br',id:r.id,at:r.at,requester:r.requester,email:r.email,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,itemName:r.item_name,reason:r.reason,qty:Number(r.qty),unit:r.unit,value:Number(r.value),neededDate:r.needed_date,cat:r.cat,procType:r.proc_type,med:r.med,hasCode:r.has_code,code:r.code,status:r.status,budgetType:r.budget_type,budgetName:r.budget_name,prId:r.pr_id,log:r.log||[]}; }
-  prToDb(p){ return {id:p.id,br_id:p.brId,requester:p.requester,owner_email:this._authEmail||null,dept:p.dept,dn:p.dn,tel:p.tel,pos:p.pos,items:p.items,sub:p.sub,vat:p.vat,total:p.total,cat:p.cat,exp:p.exp,proc_type:p.procType,urgency:p.urgency,reason:p.reason,committee:p.committee,condition:p.condition||'',po:p.po||'',vendor:p.vendor||'',docs:p.docs||[],status:p.status,at:p.at,needed_date:p.neededDate,log:p.log||[]}; }
-  prFromDb(r){ return {kind:'pr',id:r.id,brId:r.br_id,requester:r.requester,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,items:r.items||[],sub:Number(r.sub),vat:Number(r.vat),total:Number(r.total),cat:r.cat,exp:r.exp,procType:r.proc_type,urgency:r.urgency,reason:r.reason,committee:r.committee||[],condition:r.condition,po:r.po,vendor:r.vendor,docs:r.docs||[],status:r.status,at:r.at,neededDate:r.needed_date,budgetCode:r.budget_code||'',log:r.log||[]}; }
+  brToDb(b){ return {id:b.id,at:b.at,fy:b.fy||this.fyOfThai(b.at)||this.fyNow(),requester:b.requester,email:b.email||b.requester,owner_email:this._authEmail||b.email||null,dept:b.dept,dn:b.dn,tel:b.tel,pos:b.pos,item_name:b.itemName,reason:b.reason,qty:b.qty,unit:b.unit,value:b.value,needed_date:b.neededDate,cat:b.cat,proc_type:b.procType,med:!!b.med,has_code:!!b.hasCode,code:b.code||'',status:b.status,budget_type:b.budgetType,budget_name:b.budgetName,pr_id:b.prId||'',log:b.log||[]}; }
+  brFromDb(r){ return {kind:'br',id:r.id,at:r.at,fy:r.fy?Number(r.fy):null,requester:r.requester,email:r.email,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,itemName:r.item_name,reason:r.reason,qty:Number(r.qty),unit:r.unit,value:Number(r.value),neededDate:r.needed_date,cat:r.cat,procType:r.proc_type,med:r.med,hasCode:r.has_code,code:r.code,status:r.status,budgetType:r.budget_type,budgetName:r.budget_name,prId:r.pr_id,log:r.log||[]}; }
+  prToDb(p){ return {id:p.id,br_id:p.brId,fy:p.fy||this.fyOfThai(p.at)||this.fyNow(),requester:p.requester,owner_email:this._authEmail||null,dept:p.dept,dn:p.dn,tel:p.tel,pos:p.pos,items:p.items,sub:p.sub,vat:p.vat,total:p.total,cat:p.cat,exp:p.exp,proc_type:p.procType,urgency:p.urgency,reason:p.reason,committee:p.committee,condition:p.condition||'',po:p.po||'',vendor:p.vendor||'',docs:p.docs||[],status:p.status,at:p.at,needed_date:p.neededDate,log:p.log||[]}; }
+  prFromDb(r){ return {kind:'pr',id:r.id,brId:r.br_id,fy:r.fy?Number(r.fy):null,requester:r.requester,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,items:r.items||[],sub:Number(r.sub),vat:Number(r.vat),total:Number(r.total),cat:r.cat,exp:r.exp,procType:r.proc_type,urgency:r.urgency,reason:r.reason,committee:r.committee||[],condition:r.condition,po:r.po,vendor:r.vendor,docs:r.docs||[],status:r.status,at:r.at,neededDate:r.needed_date,budgetCode:r.budget_code||'',log:r.log||[]}; }
   async loadDb(){
     const sb=this.initDb();
     const fallback=()=>{ this.setState({br:[], pr:[], loaded:true, online:false, users:this.defaultUsers()}); };
@@ -615,7 +626,7 @@ class Component extends DCLogic {
       if(ap&&ap.length){ this.D.ap=ap.map(r=>({doc:r.doc,post:r.post,vn:r.vn,vc:r.vc,dept:r.dept,dn:r.dn,val:+r.val,paid:r.paid,payDate:r.pay_date,payDoc:r.pay_doc,method:r.method,base:r.base,exp:r.exp,plan:r.plan})); }
       if(pay&&pay.length){ this.D.pay=pay.map(r=>({doc:r.doc,series:r.series,post:r.post,due:r.due,vn:r.vn,vc:r.vc,total:+r.total,method:r.method,invCount:+r.inv_count,purpose:r.purpose})); }
       const bud=await this.fetchAll(sb,'sap_budget');
-      if(bud&&bud.length){ const codes=bud.map(r=>({exp:r.exp,name:r.name,plan:r.plan,sub:r.sub,current:+r.current,commit:+r.commit,actual:+r.actual,avail:+r.avail,dept:r.dept,deptCode:r.dept_code}));
+      if(bud&&bud.length){ const codes=bud.map(r=>({exp:r.exp,fy:r.fy?Number(r.fy):null,name:r.name,plan:r.plan,sub:r.sub,current:+r.current,commit:+r.commit,actual:+r.actual,avail:+r.avail,dept:r.dept,deptCode:r.dept_code}));
         const tot=codes.reduce((a,c)=>({current:a.current+c.current,commit:a.commit+c.commit,actual:a.actual+c.actual,avail:a.avail+c.avail}),{current:0,commit:0,actual:0,avail:0});
         this.D.budgetSap={generated:this.D.meta.today,codes,totals:tot}; }
       this.setState({sapOnline:!!(po&&po.length)}); if(po&&po.length) this.toastMsg('โหลดข้อมูล SAP จากฐานข้อมูลแล้ว ('+po.length+' PO · '+((ap&&ap.length)||0)+' ตั้งหนี้ · '+((pay&&pay.length)||0)+' จ่าย)');
@@ -633,10 +644,11 @@ class Component extends DCLogic {
       return true;
     }catch(e){ console.warn(e); this.toastMsg('⚠ บันทึกข้อมูล "'+id+'" ลงฐานข้อมูลไม่สำเร็จ'); return false; } }
 
-  brs(){ return this.state.br||[]; }
-  brById(id){ return this.brs().find(b=>b.id===id); }
+  brs(){ return (this.state.br||[]).filter(b=>this.inFy(b)); }
+  allBr(){ return this.state.br||[]; }
+  brById(id){ return (this.state.br||[]).find(b=>b.id===id); }
   // PR downstream status derived from linked SAP PO
-  prs(){ return (this.state.pr||[]).map(p=>{ let rec=Object.assign({},p); const poNo=rec.po||''; const po=this.prLinkedPo(poNo);
+  prs(){ return (this.state.pr||[]).filter(p=>this.inFy(p)).map(p=>{ let rec=Object.assign({},p); const poNo=rec.po||''; const po=this.prLinkedPo(poNo);
       if(poNo && po){ rec.gd=po.gd;rec.ap=po.ap;rec.paid=po.paid;rec.grl=po.grl||[];rec.vendor=rec.vendor||po.vn;rec.poVal=po.val;rec.poDeliv=po.deliv;rec.poPost=po.post;
         if(['ออกใบสั่งซื้อ','รับของแล้ว','ตั้งหนี้แล้ว','จ่ายเงินแล้ว'].includes(rec.status)){
           rec.status = po.paid>0?'จ่ายเงินแล้ว':po.ap>0?'ตั้งหนี้แล้ว':po.gd>0?'รับของแล้ว':'ออกใบสั่งซื้อ'; } }
@@ -687,7 +699,7 @@ class Component extends DCLogic {
   prCount(st){ return this.prs().filter(p=>p.status===st).length; }
   poolFor(dept,cat){ return this.D.pools.find(p=>p.dept===dept&&p.cat===cat)||this.D.pools.find(p=>p.cat===cat); }
   // งบจริงจาก SAP อ้างอิงด้วยเลขที่งบประมาณ (Budget Reserve No)
-  sapCodes(){ return (this.D.budgetSap&&this.D.budgetSap.codes)||[]; }
+  sapCodes(){ return ((this.D.budgetSap&&this.D.budgetSap.codes)||[]).filter(c=>c.fy==null||c.fy===this.curFy()); }
   sapPlans(){ const seen={},out=[]; this.sapCodes().forEach(c=>{ if(c.plan&&!seen[c.plan]){seen[c.plan]=1;out.push(c.plan);} }); return out; }
   sapCodesForPlan(plan){ return this.sapCodes().filter(c=>c.plan===plan); }
   sapBudget(code){ return this.sapCodes().find(c=>c.exp===code)||null; }
@@ -707,7 +719,7 @@ class Component extends DCLogic {
     const draft={editId:b.id,requester:b.requester,dept:b.dept,dn:b.dn,tel:b.tel||'',pos:b.pos,reason:b.reason,cat:b.cat,budgetPlan:b.budgetPlan||this.sapPlans()[0],procType:b.procType||'ซื้อ',neededDate:b.neededDate,budgetType:b.budgetType||'งบดำเนินการ',budgetName:b.budgetName,budgetCode:b.budgetCode||'',items,docs:b.docs||[]};
     this.setState({brDraft:draft,page:'br-create',sel:null,drawer:false}); this.toastMsg('แก้ไขคำขอ '+b.id+' แล้วกดส่งใหม่'); window.scrollTo&&window.scrollTo(0,0); }
   async brAllocate(id,code){ const b=this.brById(id); if(!b)return; const sb=this._sb;
-    if(sb && this.state.online){ try{ const r=await sb.rpc('allocate_budget',{p_br_id:id,p_code:b.budgetCode||'',p_value:b.value||0,p_item_code:code||null});
+    if(sb && this.state.online){ try{ const r=await sb.rpc('allocate_budget',{p_br_id:id,p_code:b.budgetCode||'',p_fy:b.fy||this.fyOfThai(b.at)||this.curFy(),p_value:b.value||0,p_item_code:code||null});
       if(r && r.data && r.data.ok===false){ this.toastMsg('จัดสรรงบไม่สำเร็จ: '+(r.data.msg||'งบคงเหลือไม่พอ')); return; }
       if(r && !r.error && r.data && r.data.ok){
         this.setState(s=>({br:s.br.map(x=>x.id===id?Object.assign({},x,{status:'จัดสรรงบแล้ว',code:code,hasCode:!!code,log:(x.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this._authName||this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code+' (ตัดงบผ่านฐานข้อมูล)'}])}):x)}));
@@ -766,7 +778,7 @@ class Component extends DCLogic {
     const inc=draft.vatMode==='incl'; const lt=it=>it.vat?(inc?Math.round((it.total||0)*7/107):Math.round((it.total||0)*0.07)):0;
     const sub=draft.items.reduce((a,it)=>a+((it.total||0)-(inc?lt(it):0)),0); const vat=draft.items.reduce((a,it)=>a+lt(it),0);
     const committee=(draft.committee||[]).filter(c=>c&&c.trim());
-    const pr={kind:'pr',id,brId:draft.brId,requester:draft.requester,dept:draft.dept,dn:draft.dn,tel:draft.tel,pos:draft.pos,
+    const pr={kind:'pr',id,fy:this.fyNow(),brId:draft.brId,requester:draft.requester,dept:draft.dept,dn:draft.dn,tel:draft.tel,pos:draft.pos,
       items:draft.items,sub,vat,total:sub+vat,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,
       committee,condition:'',po:'',vendor:'',docs:[],status:'ยื่นเสนอซื้อ',at:this.D.meta.today,neededDate:draft.neededDate,budgetCode:draft.budgetCode||'',gd:0,ap:0,paid:0,grl:[],ver:1,
       log:[{s:draft.brId?('Copy to PR — สร้างใบขอซื้อจาก '+draft.brId):'สร้างใบขอซื้อ (เริ่มกระบวนการที่ PR)',by:draft.requester,at:this.now()}]};
@@ -791,7 +803,7 @@ class Component extends DCLogic {
     if(d.editId){ const ex=this.brById(d.editId); if(ex){ this.persistBr(Object.assign({},ex,{requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',items:d.items.filter(it=>it.d),docs:d.docs||[],status:'รออนุมัติผู้บริหาร',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและยื่นใหม่',by:d.requester,at:this.now(),note:'แก้ไขรายละเอียดและส่งให้ผู้บริหารพิจารณาอีกครั้ง'}])})); }
       this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:d.editId}); this.toastMsg('แก้ไขและยื่นคำขอใหม่แล้ว — '+d.editId); window.scrollTo&&window.scrollTo(0,0); return; }
     const id=await this.genDocId('BR');
-    const nb={kind:'br',id,at:this.now(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
+    const nb={kind:'br',id,at:this.now(),fy:this.fyNow(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
     this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
   // พัสดุรับเรื่อง (เลือกเงื่อนไข)
   prReceive(id,cond){ const p=(this.state.pr||[]).find(x=>x.id===id); if(!p)return; const note=((this.state.recvNotes||{})[id]||'').trim(); const detail=note?(cond+' — '+note):cond; this.persistPr(Object.assign({},p,{status:'พัสดุรับเรื่อง',condition:cond,log:(p.log||[]).concat([{s:'พัสดุรับเรื่อง',by:this.role().user.name,at:this.now(),note:detail}])})); this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[id]:''})})); this.toastMsg('รับเรื่องแล้ว · เงื่อนไข: '+cond); }
@@ -2213,6 +2225,9 @@ class Component extends DCLogic {
       {k:'pay',label:'การจ่ายเงิน (Outgoing Payment)',desc:'จ่ายอ้างอิงใบตั้งหนี้',c:this.GREEN,n:(this.D.pay||[]).length,unit:'ครั้ง'}
     ];
     return h('div',null,
+      h('div',{style:{background:this.AMBERBG,border:'1px solid #e8d59a',borderRadius:12,padding:R.isMobile?'12px 14px':'13px 18px',marginBottom:16,display:'flex',gap:11,alignItems:'center',flexWrap:'wrap'}},
+        h('span',{style:{fontSize:17}},'📅'),
+        h('div',{style:{flex:1,minWidth:220,fontSize:12.5,color:this.INK,lineHeight:1.6}},h('b',null,'กำลังนำเข้าเข้าปีงบประมาณ '+this.curFy()),' — ข้อมูลงบประมาณที่อัปโหลดจะถูกบันทึกเข้าปีงบนี้ (ไม่ทับปีอื่น) หากต้องการนำเข้างบปีอื่น ให้เปลี่ยน "ปีงบ" ที่มุมขวาบนก่อน')),
       h('div',{style:{background:'linear-gradient(90deg,#eef5f3,#fff)',border:'1px solid '+this.LINE,borderRadius:14,padding:R.isMobile?'16px':'18px 22px',marginBottom:16,display:'flex',gap:14,alignItems:'flex-start',flexWrap:'wrap'}},
         h('div',{style:{width:42,height:42,borderRadius:11,background:this.TEAL,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}},'⤒'),
         h('div',{style:{flex:1,minWidth:220}},
@@ -2268,9 +2283,12 @@ class Component extends DCLogic {
           const key=exp+'|'+String(r[cDC]||'');
           const e=codeM[key]||(codeM[key]={exp,name:String(r[cN]||'').trim(),plan:String(r[cP]||'').trim(),sub:String(r[cS]||'').trim(),current:0,commit:0,actual:0,avail:0,dept:String(r[cDN]||'').trim(),deptCode:String(r[cDC]||'').trim()});
           e.current+=num(r[cCur]); e.commit+=num(r[cCom]); e.actual+=num(r[cAct]); e.avail+=num(r[cAv]); }
-        const codes=Object.values(codeM).map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:Math.round(c.current),commit:Math.round(c.commit),actual:Math.round(c.actual),avail:Math.round(c.avail),dept:c.dept,deptCode:c.deptCode}));
+        const codes=Object.values(codeM).map(c=>({exp:c.exp,fy:this.curFy(),name:c.name,plan:c.plan,sub:c.sub,current:Math.round(c.current),commit:Math.round(c.commit),actual:Math.round(c.actual),avail:Math.round(c.avail),dept:c.dept,deptCode:c.deptCode}));
         const tot=codes.reduce((a,c)=>({current:a.current+c.current,commit:a.commit+c.commit,actual:a.actual+c.actual,avail:a.avail+c.avail}),{current:0,commit:0,actual:0,avail:0});
-        this.D.budgetSap={generated:this.D.meta.today,codes,totals:tot};
+        // คงรหัสงบปีก่อน (fy อื่น) + เติมงบปีที่นำเข้าใหม่ (fy = ปีงบที่เลือกอยู่)
+        const keepOtherFy=(this.D.budgetSap&&this.D.budgetSap.codes||[]).filter(c=>c.fy!==this.curFy());
+        const allCodes=keepOtherFy.concat(codes);
+        this.D.budgetSap={generated:this.D.meta.today,codes:allCodes,totals:tot};
         // หมายเหตุ: ชีท BG_Detail_PO/BG_Detail_GR มีโครงสร้างคอลัมน์ต่างจากรายงาน PO/GR หลัก
         // จึงไม่ ingest อัตโนมัติ — ข้อมูล PO/GR ให้นำเข้าจากรายงาน PO/GR โดยตรงเท่านั้น
         this.persistBudgetSap(codes,tot).then(db=>this.dbToast('งบประมาณ',db));
@@ -2291,8 +2309,8 @@ class Component extends DCLogic {
     else this.toastMsg('ล้างข้อมูล SAP ในเครื่องแล้ว (โหมดสาธิต)');
     this.forceUpdate&&this.forceUpdate(); }
   async persistBudgetSap(codes,tot){ const sb=this._sb; if(!sb||!this.state.online) return {ok:false,offline:true,count:0}; if(!codes||!codes.length) return {ok:true,count:0};
-    try{ const payload=codes.map(c=>({exp:c.exp,name:c.name,plan:c.plan,sub:c.sub,current:c.current,commit:c.commit,actual:c.actual,avail:c.avail,dept:c.dept,dept_code:c.deptCode}));
-      const CH=500; let done=0; for(let i=0;i<payload.length;i+=CH){ const chunk=payload.slice(i,i+CH); const r=await sb.from('sap_budget').upsert(chunk,{onConflict:'exp'}); if(r&&r.error){ console.warn('persistBudget',r.error); return {ok:false,count:done,err:(r.error.message||JSON.stringify(r.error))}; } done+=chunk.length; }
+    try{ const payload=codes.map(c=>({exp:c.exp,fy:c.fy||this.curFy(),name:c.name,plan:c.plan,sub:c.sub,current:c.current,commit:c.commit,actual:c.actual,avail:c.avail,dept:c.dept,dept_code:c.deptCode}));
+      const CH=500; let done=0; for(let i=0;i<payload.length;i+=CH){ const chunk=payload.slice(i,i+CH); const r=await sb.from('sap_budget').upsert(chunk,{onConflict:'exp,fy'}); if(r&&r.error){ console.warn('persistBudget',r.error); return {ok:false,count:done,err:(r.error.message||JSON.stringify(r.error))}; } done+=chunk.length; }
       return {ok:true,count:done};
     }catch(e){ console.warn('persistBudgetSap',e); return {ok:false,count:0,err:(e&&e.message)||String(e)}; } }
   dbToast(label,db){ if(!db)return; if(db.offline) this.toastMsg('⚠ '+label+': บันทึกในเครื่องแล้ว (ยังไม่ขึ้นฐานข้อมูล — โหมดสาธิต)'); else if(db.ok) this.toastMsg('✓ '+label+' บันทึกฐานข้อมูลแล้ว '+db.count+' รายการ'); else this.toastMsg('✗ '+label+' บันทึกฐานข้อมูลไม่สำเร็จ: '+(db.err||'').slice(0,90)); this.forceUpdate&&this.forceUpdate(); }

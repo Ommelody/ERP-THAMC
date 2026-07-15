@@ -310,6 +310,7 @@ grant execute on function public.next_item_code() to authenticated;
 create or replace function public.allocate_budget(
   p_br_id text,
   p_code  text,
+  p_fy    int,
   p_value numeric,
   p_item_code text default null
 )
@@ -326,9 +327,9 @@ begin
   end if;
 
   -- ล็อกแถวงบไว้ก่อน กันสองคนตัดพร้อมกัน
-  select avail into v_avail from public.sap_budget where exp = p_code for update;
+  select avail into v_avail from public.sap_budget where exp = p_code and fy = p_fy for update;
   if v_avail is null then
-    return jsonb_build_object('ok', false, 'msg', 'ไม่พบเลขที่งบประมาณ ' || p_code);
+    return jsonb_build_object('ok', false, 'msg', 'ไม่พบเลขที่งบประมาณ ' || p_code || ' (ปีงบ ' || p_fy || ')');
   end if;
   if v_avail < p_value then
     return jsonb_build_object('ok', false, 'avail', v_avail,
@@ -338,7 +339,7 @@ begin
   -- ตัดยอด + อัปเดต BR
   update public.sap_budget
     set avail = avail - p_value, commit = commit + p_value, updated_at = now()
-    where exp = p_code;
+    where exp = p_code and fy = p_fy;
 
   update public.budget_requests
     set status = 'จัดสรรงบแล้ว',
@@ -352,7 +353,28 @@ begin
   return jsonb_build_object('ok', true, 'avail', v_avail - p_value);
 end;
 $$;
-grant execute on function public.allocate_budget(text, text, numeric, text) to authenticated;
+grant execute on function public.allocate_budget(text, text, int, numeric, text) to authenticated;
+
+
+-- ============================================================
+-- ส่วนที่ 4.5 — แยกข้อมูลตามปีงบประมาณราชการ (FY, เริ่ม 1 ต.ค.)
+-- ============================================================
+-- คำขอ BR/PR: เพิ่มคอลัมน์ปีงบ (พ.ศ.)
+alter table public.budget_requests   add column if not exists fy int;
+alter table public.purchase_requests add column if not exists fy int;
+
+-- ตารางงบ SAP: เพิ่มปีงบ แล้วเปลี่ยน primary key เป็น (exp, fy)
+-- เพื่อให้เก็บงบหลายปีพร้อมกันได้ (เลขงบเดียวกันปรากฏได้ทุกปี)
+alter table public.sap_budget add column if not exists fy int;
+-- สมมุติข้อมูลเดิมที่ยังไม่มีปีงบ = ปีงบ 2569 (แก้ตัวเลขนี้ถ้าข้อมูลเดิมเป็นปีอื่น)
+update public.sap_budget set fy = 2569 where fy is null;
+alter table public.sap_budget alter column fy set not null;
+alter table public.sap_budget drop constraint if exists sap_budget_pkey;
+alter table public.sap_budget add constraint sap_budget_pkey primary key (exp, fy);
+
+-- ดัชนีช่วยกรองตามปีงบ
+create index if not exists idx_br_fy on public.budget_requests(fy);
+create index if not exists idx_pr_fy on public.purchase_requests(fy);
 
 
 -- ============================================================
