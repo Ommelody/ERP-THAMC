@@ -378,6 +378,34 @@ create index if not exists idx_pr_fy on public.purchase_requests(fy);
 
 
 -- ============================================================
+-- ส่วนที่ 4.6 — ตารางบันทึกการใช้งาน (Audit Log) : login + แก้ไขข้อมูล
+-- ============================================================
+-- เก็บ event ระดับระบบ: เข้า/ออกระบบ, แก้ไข/เพิ่ม/ลบผู้ใช้, นำเข้าข้อมูล SAP/งบ ฯลฯ
+-- แยกจาก log ของเอกสาร BR/PR — ไม่หายแม้เอกสารถูกลบ
+create table if not exists public.audit_log (
+  id          bigint generated always as identity primary key,
+  ts          timestamptz default now(),
+  at          text,          -- วันเวลาแบบไทย (สำหรับแสดง/เรียงร่วมกับ log เอกสาร)
+  actor_email text,
+  actor_name  text,
+  role        text,
+  action      text,          -- เช่น เข้าสู่ระบบ, ออกจากระบบ, แก้ไขผู้ใช้, นำเข้าข้อมูล SAP
+  target      text,          -- สิ่งที่ถูกกระทำ (อีเมล/ชื่อผู้ใช้/ชื่อตาราง ฯลฯ)
+  note        text
+);
+alter table public.audit_log enable row level security;
+-- ผู้ล็อกอินทุกคนเขียน event ของตัวเองได้ (บันทึกการกระทำ)
+drop policy if exists "audit insert" on public.audit_log;
+create policy "audit insert" on public.audit_log
+  for insert to authenticated with check ( true );
+-- อ่านได้เฉพาะผู้ดูแลระบบ
+drop policy if exists "audit read" on public.audit_log;
+create policy "audit read" on public.audit_log
+  for select to authenticated using ( public.is_role(array['admin']) );
+create index if not exists idx_audit_ts on public.audit_log(ts desc);
+
+
+-- ============================================================
 -- ส่วนที่ 5 — เลิกใช้ตารางรหัสผ่าน plaintext เดิม
 -- ============================================================
 -- app_users เก็บรหัสผ่านแบบอ่านได้ — เมื่อย้ายไป Supabase Auth แล้วให้ลบทิ้ง

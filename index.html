@@ -63,7 +63,7 @@ class Component extends DCLogic {
     br:[], pr:[], loaded:false, online:false, sapOnline:false, notifOpen:false,
     authed:false, loginU:'', loginP:'', loginErr:'', prDraft:null,
     icrRows:[], icrInput:{}, users:[], userForm:{username:'',password:'',name:'',role:'requester'}, brDraft:null, confirm:null,
-    canInstall:false, notifBefore:{lo:7,hi:30}, uploads:{}, curFy:null, editUser:null
+    canInstall:false, notifBefore:{lo:7,hi:30}, uploads:{}, curFy:null, editUser:null, auditEvents:[]
   };
   // ---------- ปีงบประมาณราชการ (เริ่ม 1 ต.ค. / พ.ศ.) ----------
   fyOfDate(d){ if(!d) return null; const by=d.getFullYear()+543; return d.getMonth()>=9? by+1 : by; }
@@ -73,8 +73,18 @@ class Component extends DCLogic {
   fyList(){ const set={}; (this.state.br||[]).forEach(b=>{ const f=b.fy||this.fyOfThai(b.at); if(f)set[f]=1; });
     (this.state.pr||[]).forEach(p=>{ const f=p.fy||this.fyOfThai(p.at); if(f)set[f]=1; });
     ((this.D&&this.D.budgetSap&&this.D.budgetSap.codes)||[]).forEach(c=>{ if(c.fy)set[c.fy]=1; });
-    set[this.fyNow()]=1; return Object.keys(set).map(Number).sort((a,b)=>b-a); }
+    set[this.fyNow()]=1; set[this.fyNow()+1]=1; if(this.state.curFy) set[this.state.curFy]=1;
+    return Object.keys(set).map(Number).sort((a,b)=>b-a); }
   inFy(rec){ const f=rec.fy||this.fyOfThai(rec.at); return f==null || f===this.curFy(); }
+  // ---------- Audit Log (login + แก้ไขข้อมูล) ----------
+  async logEvent(action,target,note,roleOverride){
+    const ev={ at:(this.D&&this.D.meta)?this.now():'', by:this._authName||(this.role&&this.role().user?this.role().user.name:'—'),
+      role:roleOverride||this.state.role, action:action||'', target:target||'', note:note||'' };
+    this.setState(s=>({auditEvents:[Object.assign({kind:'sys'},ev)].concat(s.auditEvents||[])}));
+    const sb=this._sb; if(sb&&this.state.online){ try{ await sb.from('audit_log').insert({at:ev.at,actor_email:this._authEmail||null,actor_name:ev.by,role:ev.role,action:ev.action,target:ev.target,note:ev.note}); }catch(e){ console.warn('audit',e); } } }
+  async loadAuditLog(){ const sb=this._sb; if(!sb||!this.state.online) return;
+    try{ const r=await sb.from('audit_log').select('*').order('ts',{ascending:false}).limit(1000);
+      if(r&&!r.error&&r.data){ this.setState({auditEvents:r.data.map(x=>({kind:'sys',at:x.at||'',by:x.actor_name||x.actor_email||'—',role:x.role,action:x.action,target:x.target,note:x.note}))}); } }catch(e){} }
   SUPA_URL='https://hkqyeeonfyzlbnimztuz.supabase.co';  SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhrcXllZW9uZnl6bGJuaW16dHV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2ODU4NDMsImV4cCI6MjA5OTI2MTg0M30.Od-n8yNuIWu6Kx1Y_mW6Aemg3TRCxZG5ooTESpOgZBE';
   ITEMPRO_API='';  // (ตัวเลือก) URL ปลายทาง REST ของโปรแกรม Item Master Pro เช่น https://itempro.example/api/code-request — เว้นว่างได้ ระบบจะใช้ตาราง item_code_requests บน Supabase เป็นช่องทาง
   ITEMPRO_KEY='';  // (ตัวเลือก) API key/token สำหรับ Item Pro
@@ -162,11 +172,12 @@ class Component extends DCLogic {
     {zone:'ตั้งค่า & ข้อมูล',items:[
       {key:'data-sync',label:'นำเข้าข้อมูล SAP',icon:'⤒',roles:['procurement','budget','finance','exec']},
       {key:'flowchart',label:'ผังกระบวนการ',icon:'⧉',roles:['admin']},
+      {key:'audit-log',label:'บันทึกการใช้งาน (Audit Log)',icon:'≣',roles:['admin']},
       {key:'settings',label:'ตั้งค่าระบบ',icon:'⚙',roles:['admin','exec']}
     ]}
   ];
   navFor(){ const r=this.state.role; return this.NAV.map(z=>({zone:z.zone,items:z.items.filter(it=>r==='admin'||it.roles.includes(r))})).filter(z=>z.items.length); }
-  go(key){ if(key==='br-create'&&!this.state.brDraft) this.setState({brDraft:this.newBrDraft()}); this.setState({page:key,drawer:false,sel:null}); if(key==='item-pro') this.loadIcr(); if(key==='settings'||key==='admin-users') this.loadUsers(); window.scrollTo&&window.scrollTo(0,0); }
+  go(key){ if(key==='br-create'&&!this.state.brDraft) this.setState({brDraft:this.newBrDraft()}); this.setState({page:key,drawer:false,sel:null}); if(key==='item-pro') this.loadIcr(); if(key==='settings'||key==='admin-users') this.loadUsers(); if(key==='audit-log') this.loadAuditLog(); window.scrollTo&&window.scrollTo(0,0); }
   switchRole(rk){ this.setState({role:rk,roleMenu:false,drawer:false,sel:null,selType:null,page:this.roleHome(rk),poTab:'all',payTab:'unpaid',regTab:'all'}); }
 
   badgeCount(kind){ if(!this.D)return 0;
@@ -241,6 +252,7 @@ class Component extends DCLogic {
           this._authEmail=u; this._authName=name; this._authProfile=prof;
           let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
           this.setState({authed:true,role,page: tp?'tracking':this.roleHome(role),loginErr:'',loginP:'',trackQ:tp||'',trackResult:tp||null});
+          this.logEvent('เข้าสู่ระบบ',u,(this.ROLES.find(r=>r.k===role)||{}).label||role,role);
           this.toastMsg('เข้าสู่ระบบสำเร็จ · '+((this.ROLES.find(r=>r.k===role)||{}).label||role)); return; }
         if(res.error){ this.setState({loginErr:'อีเมลหรือรหัสผ่านไม่ถูกต้อง'}); return; }
       }catch(e){ this.setState({loginErr:'เชื่อมต่อระบบยืนยันตัวตนไม่สำเร็จ — ลองใหม่อีกครั้ง'}); return; }
@@ -251,9 +263,9 @@ class Component extends DCLogic {
     if(!acc && u.toLowerCase()==='admin' && p==='Admin') acc={u:'Admin',role:'admin',active:true};
     if(acc && acc.active===false){ this.setState({loginErr:'บัญชีนี้ถูกระงับการใช้งาน — ติดต่อผู้ดูแลระบบ'}); return; }
     if(acc){ this._authEmail=null; this._authName=acc.name||acc.u; let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
-      this.setState({authed:true,role:acc.role,page: tp?'tracking':this.roleHome(acc.role),loginErr:'',loginP:'',trackQ:tp||'',trackResult:tp||null}); this.toastMsg('เข้าสู่ระบบสำเร็จ · '+this.ROLES.find(r=>r.k===acc.role).label); }
+      this.setState({authed:true,role:acc.role,page: tp?'tracking':this.roleHome(acc.role),loginErr:'',loginP:'',trackQ:tp||'',trackResult:tp||null}); this.logEvent('เข้าสู่ระบบ',acc.u,'โหมดสาธิต',acc.role); this.toastMsg('เข้าสู่ระบบสำเร็จ · '+this.ROLES.find(r=>r.k===acc.role).label); }
     else this.setState({loginErr:'ชื่อผู้ใช้/อีเมลหรือรหัสผ่านไม่ถูกต้อง'}); }
-  logout(){ const sb=this._sb; if(sb&&sb.auth){ try{ sb.auth.signOut(); }catch(e){} } this._authEmail=null; this._authName=null; this._authProfile=null; this.setState({authed:false,loginU:'',loginP:'',roleMenu:false,drawer:false}); }
+  logout(){ this.logEvent('ออกจากระบบ',this._authEmail||this._authName||'',''); const sb=this._sb; if(sb&&sb.auth){ try{ sb.auth.signOut(); }catch(e){} } this._authEmail=null; this._authName=null; this._authProfile=null; this.setState({authed:false,loginU:'',loginP:'',roleMenu:false,drawer:false}); }
   doInstall(){ const p=this._deferredPrompt;
     if(p){ p.prompt(); p.userChoice.finally(()=>{ this._deferredPrompt=null; this.setState({canInstall:false}); }); }
     else { const iOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -420,7 +432,8 @@ class Component extends DCLogic {
     'tracking':{t:'ติดตามสถานะ',s:'ค้นเลขเอกสาร / สแกน QR ดูไทม์ไลน์เต็ม'},
     'pay-track':{t:'ติดตามสถานะการจ่ายเงิน',s:'ใบตั้งหนี้ค้างจ่ายและประวัติการจ่าย'},
     'registry':{t:'ทะเบียนเอกสาร',s:'คำขอ BR/PR ทั้งหมดในระบบ'},
-    'reports':{t:'รายงาน + Export SAP',s:'ส่งออกรหัส 19 คอลัมน์ นำเข้า SAP'}
+    'reports':{t:'รายงาน + Export SAP',s:'ส่งออกรหัส 19 คอลัมน์ นำเข้า SAP'},
+    'audit-log':{t:'บันทึกการใช้งาน (Audit Log)',s:'ประวัติการดำเนินการทุกขั้นตอนของคำขอ BR/PR ทั้งระบบ'}
   }; return m[this.state.page]||{t:'',s:''}; }
 
   // ---------- mobile drawer + nav ----------
@@ -491,6 +504,7 @@ class Component extends DCLogic {
       case 'settings': return this.pgSettings();
       case 'data-sync': return this.pgDataSync();
       case 'flowchart': return this.pgFlow();
+      case 'audit-log': return this.pgAudit();
       case 'br-approval': return this.pgBrApproval();
       case 'br-allocate': return this.pgBrAllocate();
       case 'pr-queue': return this.pgPrQueue();
@@ -2202,17 +2216,19 @@ class Component extends DCLogic {
       else sb.from('app_users').upsert(u,{onConflict:'username'}).then(r=>{if(r&&r.error)console.warn(r.error);}); } }
   openEditUser(username){ const u=(this.state.users||[]).find(x=>x.username===username); if(u) this.setState({editUser:Object.assign({},u)}); }
   updEditUser(patch){ this.setState(s=>({editUser:Object.assign({},s.editUser,patch)})); }
-  saveEditUser(){ const eu=this.state.editUser; if(!eu) return; this.saveUser(Object.assign({},eu)); this.setState({editUser:null}); this.toastMsg('บันทึกข้อมูลผู้ใช้ '+eu.username+' แล้ว'); }
-  setUserRole(username,role){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{role})); this.toastMsg('เปลี่ยนสิทธิ์ '+username+' → '+(this.ROLES.find(r=>r.k===role)||{}).label); } }
-  toggleUser(username){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{active:!(u.active!==false)})); } }
+  saveEditUser(){ const eu=this.state.editUser; if(!eu) return; this.saveUser(Object.assign({},eu)); this.setState({editUser:null}); this.logEvent('แก้ไขผู้ใช้',eu.username,'สิทธิ์: '+((this.ROLES.find(r=>r.k===eu.role)||{}).label||eu.role)+(eu.active===false?' · ระงับใช้งาน':'')); this.toastMsg('บันทึกข้อมูลผู้ใช้ '+eu.username+' แล้ว'); }
+  setUserRole(username,role){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ this.saveUser(Object.assign({},u,{role})); this.logEvent('เปลี่ยนสิทธิ์ผู้ใช้',username,(this.ROLES.find(r=>r.k===role)||{}).label||role); this.toastMsg('เปลี่ยนสิทธิ์ '+username+' → '+(this.ROLES.find(r=>r.k===role)||{}).label); } }
+  toggleUser(username){ const u=(this.state.users||[]).find(x=>x.username===username); if(u){ const nowActive=!(u.active!==false); this.saveUser(Object.assign({},u,{active:nowActive})); this.logEvent(nowActive?'เปิดใช้งานผู้ใช้':'ระงับผู้ใช้',username,''); } }
   delUser(username){ if(String(username).toLowerCase()==='admin'){ this.toastMsg('ลบบัญชีผู้ดูแลระบบไม่ได้'); return; }
     this.setState(s=>({users:(s.users||[]).filter(x=>x.username!==username)}));
     const sb=this._sb; if(sb&&this.state.online){ if(this._authEmail){ sb.from('profiles').update({active:false}).eq('email',username).then(r=>{if(r&&r.error)console.warn(r.error);}); } else sb.from('app_users').delete().eq('username',username).then(r=>{if(r&&r.error)console.warn(r.error);}); }
+    this.logEvent('ลบผู้ใช้',username,'');
     this.toastMsg('ลบผู้ใช้ '+username+' แล้ว'); }
   addUser(){ const fm=this.state.userForm||{}; const un=(fm.username||'').trim(); if(!un||!fm.password){ this.toastMsg('กรอกชื่อผู้ใช้และรหัสผ่าน'); return; }
     if(this._authEmail){ this.toastMsg('โหมดใช้งานจริง: เพิ่มผู้ใช้ใหม่ที่ Supabase → Authentication → Add user แล้วกำหนดสิทธิ์ (role) ที่นี่'); return; }
     if((this.state.users||[]).some(x=>x.username.toLowerCase()===un.toLowerCase())){ this.toastMsg('มีชื่อผู้ใช้นี้อยู่แล้ว'); return; }
     this.saveUser({username:un,password:fm.password,name:fm.name||un,role:fm.role||'requester',active:true});
+    this.logEvent('เพิ่มผู้ใช้',un,(this.ROLES.find(r=>r.k===(fm.role||'requester'))||{}).label||'');
     this.setState({userForm:{username:'',password:'',name:'',role:'requester'}}); this.toastMsg('เพิ่มผู้ใช้ '+un+' แล้ว'); }
   async clearDemo(){ const sb=this._sb;
     if(sb&&this.state.online){ try{ await sb.from('purchase_requests').delete().neq('id',''); await sb.from('budget_requests').delete().neq('id',''); await sb.from('item_code_requests').delete().gte('id',0); }catch(e){ console.warn(e); } }
@@ -2229,6 +2245,54 @@ class Component extends DCLogic {
       this.card(h('div',{style:{padding:0,overflow:'hidden',borderRadius:14}},
         h('div',{style:{width:'100%',overflowX:'auto',background:'#e8ecec'}},
           h('iframe',{src:'Flowchart.dc.html',title:'ผังกระบวนการ ERP',style:{width:1400,height:1720,border:'none',display:'block'}})))));
+  }
+
+  auditRows(){ const rows=[];
+    const push=(rec,kind)=>{ (rec.log||[]).forEach((e,i)=>{ rows.push({
+      id:rec.id, kind:kind, at:e.at||rec.at||'', by:e.by||'—', action:e.s||e.action||'—',
+      note:e.note||'', value:rec.value!=null?rec.value:(rec.total!=null?rec.total:null),
+      _d:this.parseThai((e.at||'').split(' ')[0]||''), _t:(e.at||'').split(' ')[1]||'', _seq:i }); }); };
+    (this.state.br||[]).filter(b=>this.inFy(b)).forEach(b=>push(b,'br'));
+    (this.state.pr||[]).filter(p=>this.inFy(p)).forEach(p=>push(p,'pr'));
+    (this.state.auditEvents||[]).forEach((e,i)=>{ rows.push({ id:e.target||'—', kind:'sys', at:e.at||'', by:e.by||'—', action:e.action||'—', note:e.note||'', value:null,
+      _d:this.parseThai((e.at||'').split(' ')[0]||''), _t:(e.at||'').split(' ')[1]||'', _seq:9000+i }); });
+    rows.sort((a,b)=>{ const da=a._d?a._d.getTime():0, db=b._d?b._d.getTime():0; if(db!==da) return db-da; return (b._t+b._seq).localeCompare(a._t+a._seq); });
+    return rows; }
+
+  pgAudit(){ const h=React.createElement; const R=this.R;
+    const q=(this.state.auditQ||'').trim().toLowerCase();
+    const kf=this.state.auditKind||'all';
+    let rows=this.auditRows();
+    if(kf!=='all') rows=rows.filter(r=>r.kind===kf);
+    if(q) rows=rows.filter(r=>(r.id+' '+r.by+' '+r.action+' '+r.note).toLowerCase().includes(q));
+    const page=this.state.auditPage||0; const PER=40; const shown=rows.slice(0,(page+1)*PER);
+    const selStyle={border:'1px solid '+this.LINE,borderRadius:9,padding:'8px 10px',fontSize:12.5,background:'#fff',cursor:'pointer',outline:'none'};
+    const kBtn=(k,label)=>h('button',{key:k,onClick:()=>this.setState({auditKind:k,auditPage:0}),style:{padding:'8px 14px',border:'1px solid '+(kf===k?this.TEAL:this.LINE),background:kf===k?this.TEAL:'#fff',color:kf===k?'#fff':this.INK,borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},label);
+    const exportCsv=()=>{ const esc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+      const head=['วันเวลา','ประเภท','เลขที่เอกสาร','ผู้ดำเนินการ','การดำเนินการ','รายละเอียด','มูลค่า'];
+      const lines=[head.map(esc).join(',')].concat(rows.map(r=>[r.at,r.kind==='br'?'คำขออนุมัติงบ':r.kind==='pr'?'ใบขอซื้อ':'ระบบ/ผู้ใช้',r.id,r.by,r.action,r.note,r.value!=null?r.value:''].map(esc).join(',')));
+      const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}); const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='audit-log-'+this.curFy()+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1500); };
+    return h('div',null,
+      this.card(h('div',{style:{padding:R.isMobile?'15px':'18px 20px'}},
+        this.secTitle('บันทึกการใช้งานทั้งระบบ — ค้นหา / กรอง / ส่งออก',
+          h('span',{style:{fontSize:12,color:this.MUTE}},'ทั้งหมด '+rows.length+' รายการ')),
+        h('div',{style:{display:'flex',gap:9,flexWrap:'wrap',marginBottom:14,alignItems:'center'}},
+          h('input',{value:this.state.auditQ||'',onChange:e=>this.setState({auditQ:e.target.value,auditPage:0}),placeholder:'ค้นเลขเอกสาร / ผู้ดำเนินการ / การดำเนินการ',style:{flex:1,minWidth:200,border:'1px solid '+this.LINE,borderRadius:9,padding:'9px 12px',fontSize:13,outline:'none'}}),
+          kBtn('all','ทั้งหมด'), kBtn('sys','ระบบ/ผู้ใช้'), kBtn('br','คำขออนุมัติงบ'), kBtn('pr','ใบขอซื้อ'),
+          h('button',{onClick:exportCsv,disabled:!rows.length,style:{padding:'8px 16px',border:'1px solid '+this.TEAL,background:'#fff',color:this.TEAL,borderRadius:9,fontSize:12.5,cursor:rows.length?'pointer':'default',fontWeight:600,opacity:rows.length?1:.5}},'⤓ ส่งออก CSV')),
+        rows.length? h('div',{style:{overflowX:'auto'}}, h('div',{style:{minWidth:R.isMobile?720:'auto'}},
+          h('div',{style:{display:'grid',gridTemplateColumns:'132px 92px 132px 150px 1fr',padding:'9px 12px',background:this.PANEL,fontSize:10.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',borderRadius:'8px 8px 0 0'}},
+            h('div',null,'วันเวลา'),h('div',null,'ประเภท'),h('div',null,'เลขที่เอกสาร'),h('div',null,'ผู้ดำเนินการ'),h('div',null,'การดำเนินการ')),
+          shown.map((r,i)=>h('div',{key:i,onClick:()=>{ if(r.kind!=='sys') this.setState({sel:r.id,selType:r.kind}); },style:{display:'grid',gridTemplateColumns:'132px 92px 132px 150px 1fr',padding:'10px 12px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',cursor:r.kind==='sys'?'default':'pointer'}},
+            h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5,color:this.MUTE}},r.at||'—'),
+            h('div',null,this.pill(r.kind==='br'?'ขออนุมัติงบ':r.kind==='pr'?'ใบขอซื้อ':'ระบบ/ผู้ใช้',r.kind==='br'?this.PUR:r.kind==='pr'?this.TEAL:this.AMBER,r.kind==='br'?this.PANEL:r.kind==='pr'?this.GREENBG:this.AMBERBG,true)),
+            h('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:12,minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.id),
+            h('div',{style:{minWidth:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},r.by),
+            h('div',{style:{minWidth:0}},h('span',{style:{fontWeight:600,color:this.INK}},r.action),r.note?h('span',{style:{color:this.MUTE}},' — '+r.note):null)))),
+          shown.length<rows.length? h('div',{style:{textAlign:'center',marginTop:14}},
+            h('button',{onClick:()=>this.setState({auditPage:page+1}),style:{padding:'9px 20px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:9,fontSize:12.5,cursor:'pointer',fontWeight:600}},'แสดงเพิ่ม ('+(rows.length-shown.length)+' รายการ)')):null
+        ) : this.emptyBox('ยังไม่มีบันทึกการใช้งานในปีงบนี้'))));
   }
 
   pgDataSync(){
@@ -2312,11 +2376,12 @@ class Component extends DCLogic {
         // หมายเหตุ: ชีท BG_Detail_PO/BG_Detail_GR มีโครงสร้างคอลัมน์ต่างจากรายงาน PO/GR หลัก
         // จึงไม่ ingest อัตโนมัติ — ข้อมูล PO/GR ให้นำเข้าจากรายงาน PO/GR โดยตรงเท่านั้น
         this.persistBudgetSap(codes,tot).then(db=>this.dbToast('งบประมาณ',db));
+        this.logEvent('นำเข้างบประมาณ','ปีงบ '+this.curFy(),codes.length+' เลขงบ');
         done('นำเข้ารายงานงบประมาณแล้ว — '+codes.length+' เลขงบ · กำลังบันทึกฐานข้อมูล…');
-      } else if(kind==='po'){ const x=this.ingestPo(rows,num,dnum,TODAY); done('นำเข้า PO — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.po.length+' ใบ) · กำลังบันทึกฐานข้อมูล…'); }
-      else if(kind==='gr'){ const x=this.ingestGr(rows,num); done('นำเข้า GR แล้ว — '+x.n+' ใบตรวจรับ ('+x.lines+' รายการย่อย จับคู่เข้า PO) · กำลังบันทึกฐานข้อมูล…'); }
-      else if(kind==='ap'){ const x=this.ingestAp(rows,num); done('นำเข้าใบตั้งหนี้ — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.ap.length+' ใบ) · กำลังบันทึกฐานข้อมูล…'); }
-      else if(kind==='pay'){ const x=this.ingestPay(rows,num); done('นำเข้าการจ่ายเงิน — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.pay.length+' รายการ) · กำลังบันทึกฐานข้อมูล…'); }
+      } else if(kind==='po'){ const x=this.ingestPo(rows,num,dnum,TODAY); this.logEvent('นำเข้าข้อมูล SAP','รายงาน PO','เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd); done('นำเข้า PO — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.po.length+' ใบ) · กำลังบันทึกฐานข้อมูล…'); }
+      else if(kind==='gr'){ const x=this.ingestGr(rows,num); this.logEvent('นำเข้าข้อมูล SAP','รายงาน GR (ตรวจรับ)',x.n+' ใบ'); done('นำเข้า GR แล้ว — '+x.n+' ใบตรวจรับ ('+x.lines+' รายการย่อย จับคู่เข้า PO) · กำลังบันทึกฐานข้อมูล…'); }
+      else if(kind==='ap'){ const x=this.ingestAp(rows,num); this.logEvent('นำเข้าข้อมูล SAP','ใบตั้งหนี้ (AP)','เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd); done('นำเข้าใบตั้งหนี้ — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.ap.length+' ใบ) · กำลังบันทึกฐานข้อมูล…'); }
+      else if(kind==='pay'){ const x=this.ingestPay(rows,num); this.logEvent('นำเข้าข้อมูล SAP','การจ่ายเงิน','เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd); done('นำเข้าการจ่ายเงิน — เพิ่มใหม่ '+x.added+' · อัปเดต '+x.upd+' (รวม '+this.D.pay.length+' รายการ) · กำลังบันทึกฐานข้อมูล…'); }
       else done('นำเข้าไฟล์แล้ว');
     }).catch(err=>{ this.setState(s=>({uploads:Object.assign({},s.uploads,{[kind]:{name:nm,at:this.now(),status:'ผิดพลาด'}})})); this.toastMsg('อ่านไฟล์ไม่สำเร็จ: '+(err.message||err)); });
   }
