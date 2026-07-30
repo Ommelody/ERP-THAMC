@@ -524,7 +524,9 @@ class Component extends DCLogic {
     return {doc:key,vn:r.vn||r.vendor||r.VendorName||r.CardName||'(จาก PO Tracking Dashboard)',vc:r.vc||r.vendorCode||'',val:+(r.val||r.total||r.DocTotal||r.amount||0)||0,qty:0,open:0,gd:+(r.gd||r.grCount||0)||(r.gr?1:0),ap:+(r.ap||0)||0,paid:+(r.paid||0)||0,deliv:r.deliv||r.DocDueDate||'',post:r.post||r.DocDate||'',dn:'',exp:'',grl:[],ext:true}; }
   prLinkedPo(poNo){ if(!poNo) return null; return this.D.po.find(x=>x.doc===poNo) || this.extPoFind(poNo) || null; }
   // ---------- Supabase data layer ----------
-  now(){ const d=new Date(); return this.D.meta.today+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+  THMONA=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  todayThai(){ const d=new Date(); return d.getDate()+' '+this.THMONA[d.getMonth()]+' '+(d.getFullYear()+543); }
+  now(){ const d=new Date(); return this.todayThai()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
   THMON={'ม.ค.':1,'ก.พ.':2,'มี.ค.':3,'เม.ย.':4,'พ.ค.':5,'มิ.ย.':6,'ก.ค.':7,'ส.ค.':8,'ก.ย.':9,'ต.ค.':10,'พ.ย.':11,'ธ.ค.':12};
   parseThai(s){ if(!s) return null; const p=String(s).trim().split(/\s+/); if(p.length<3) return null; const d=+p[0], mo=this.THMON[p[1]], y=(+p[2])-543; if(!mo||!y||!d) return null; return new Date(y,mo-1,d); }
   todayDate(){ const d=new Date(); return new Date(d.getFullYear(),d.getMonth(),d.getDate()); }
