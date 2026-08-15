@@ -343,7 +343,7 @@ class Component extends DCLogic {
   shell(content){
     const h=React.createElement; const R=this.R;
     if(R.isMobile) return h('div',{style:{minHeight:'100vh',background:this.BG}},
-      this.topbar(), h('div',{style:{padding:'14px 13px 90px'}}, content),
+      this.topbar(), h('div',{style:{padding:'14px 13px calc(104px + env(safe-area-inset-bottom))'}}, content),
       this.state.drawer? this.drawer():null, this.mobileNav(),
       this.state.sel? this.detailModal():null, this.state.approveModal? this.approveSheet():null,
       this.state.poBindModal? this.poBindSheet():null, this.extraModals(),
@@ -466,11 +466,18 @@ class Component extends DCLogic {
             z.items.map(it=>this.navItem(it))))),
         this.userChip(role)));
   }
-  mobileNav(){ const h=React.createElement; const nav=this.navFor().flatMap(z=>z.items).slice(0,4); const home=this.roleHome(this.state.role);
-    const items=[{key:home,label:'หน้าหลัก',icon:'◱'},...this.navFor().flatMap(z=>z.items).filter(it=>it.key!==home).slice(0,3)];
-    return h('div',{style:{position:'fixed',left:0,right:0,bottom:0,zIndex:40,background:'rgba(255,255,255,.96)',backdropFilter:'blur(10px)',borderTop:'1px solid '+this.LINE,display:'flex',paddingBottom:'env(safe-area-inset-bottom)'}},
-      items.map(it=>{ const active=this.state.page===it.key; return h('button',{key:it.key,onClick:()=>this.go(it.key),style:{flex:1,border:'none',background:'transparent',padding:'9px 2px 7px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',color:active?this.TEAL:this.MUTE}},
-        h('span',{style:{fontSize:18}},it.icon), h('span',{style:{fontSize:9.5,fontWeight:active?700:500,whiteSpace:'nowrap',maxWidth:70,overflow:'hidden',textOverflow:'ellipsis'}},it.label)); }));
+  mobileNav(){ const h=React.createElement; const home=this.roleHome(this.state.role);
+    const rest=this.navFor().flatMap(z=>z.items).filter(it=>it.key!==home).slice(0,3);
+    const items=[{key:home,label:'หน้าหลัก',icon:'◱'},...rest,{key:'__menu',label:'เมนู',icon:'≡'}];
+    return h('div',{style:{position:'fixed',left:0,right:0,bottom:0,zIndex:40,padding:'0 12px calc(10px + env(safe-area-inset-bottom))',pointerEvents:'none'}},
+      h('div',{style:{pointerEvents:'auto',display:'flex',alignItems:'stretch',gap:2,background:'rgba(255,255,255,.92)',backdropFilter:'blur(18px)',WebkitBackdropFilter:'blur(18px)',border:'1px solid rgba(14,45,41,.07)',borderRadius:22,padding:'6px 6px',boxShadow:'0 8px 28px rgba(10,35,30,.16), 0 2px 6px rgba(10,35,30,.06)'}},
+        items.map(it=>{ const isMenu=it.key==='__menu'; const active=!isMenu&&this.state.page===it.key;
+          const n=it.badge? this.badgeCount(it.badge):0;
+          return h('button',{key:it.key,onClick:()=>{ if(isMenu) this.setState({drawer:true}); else this.go(it.key); },
+            style:{flex:1,minWidth:0,position:'relative',border:'none',background:active?this.GREENBG:'transparent',borderRadius:16,padding:'8px 2px 7px',display:'flex',flexDirection:'column',alignItems:'center',gap:3,cursor:'pointer',color:active?this.TEAL:this.MUTE,transition:'background .18s'}},
+            h('span',{style:{fontSize:18,lineHeight:1,position:'relative'}},it.icon,
+              n>0? h('span',{style:{position:'absolute',top:-5,right:-11,minWidth:15,height:15,padding:'0 4px',borderRadius:8,background:this.RED,color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'IBM Plex Mono',monospace",border:'1.5px solid #fff'}},n>99?'99+':n):null),
+            h('span',{style:{fontSize:9.5,fontWeight:active?700:500,whiteSpace:'nowrap',maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis',padding:'0 2px'}},it.label)); })));
   }
   roleSheet(){ const h=React.createElement; const R=this.R;
     return h('div',{onClick:()=>this.setState({roleMenu:false}),style:{position:'fixed',inset:0,zIndex:70,background:'rgba(10,25,22,.45)',display:'flex',alignItems:R.isMobile?'flex-end':'center',justifyContent:'center',padding:R.isMobile?0:20,animation:'overlayIn .15s'}},
@@ -499,7 +506,7 @@ class Component extends DCLogic {
           h('button',{onClick:()=>{ const fn=c.onOk; this.setState({confirm:null}); if(fn)fn(); },style:{flex:2,padding:'12px',border:'none',background:c.danger?this.RED:this.TEAL,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},c.okLabel))));
   }
   toastEl(){ const h=React.createElement;
-    return h('div',{style:{position:'fixed',bottom:this.R.isMobile?80:26,left:'50%',transform:'translateX(-50%)',zIndex:90,background:this.INK,color:'#fff',padding:'12px 20px',borderRadius:11,fontSize:13,fontWeight:500,boxShadow:'0 12px 34px rgba(10,25,22,.4)',display:'flex',alignItems:'center',gap:9,maxWidth:'90vw',animation:'fadeUp .25s'}},
+    return h('div',{style:{position:'fixed',bottom:this.R.isMobile?'calc(96px + env(safe-area-inset-bottom))':26,left:'50%',transform:'translateX(-50%)',zIndex:90,background:this.INK,color:'#fff',padding:'12px 20px',borderRadius:11,fontSize:13,fontWeight:500,boxShadow:'0 12px 34px rgba(10,25,22,.4)',display:'flex',alignItems:'center',gap:9,maxWidth:'90vw',animation:'fadeUp .25s'}},
       h('span',{style:{width:18,height:18,borderRadius:'50%',background:this.GREEN,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12}},'✓'), this.state.toast); }
 
   // ---------- shared UI ----------
