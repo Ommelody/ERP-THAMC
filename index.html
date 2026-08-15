@@ -106,6 +106,20 @@ class Component extends DCLogic {
     }catch(e){}
     const t=()=>{ if(window.ERPDATA){ this.D=window.ERPDATA; this.D.po=[]; this.D.ap=[]; this.D.pay=[]; this.loadSapLocal(); this.loadExps(); this.setState({ready:true,vw:this._winW(),page:this.roleHome('requester'),uploads:this._restoredUploads||{},curFy:this.fyNow()}); this.loadDb(); } else setTimeout(t,60); };
     t();
+    this.restoreSession();
+  }
+  // กู้คืน session ที่ค้างอยู่ — เข้าระบบต่อโดยไม่ต้องล็อกอินซ้ำหลังรีเฟรช/ปิดแอป
+  async restoreSession(){ const sb=this.initDb(); if(!sb||!sb.auth) return;
+    try{ const {data}=await sb.auth.getSession(); const s=data&&data.session; if(!s||!s.user) return;
+      const email=s.user.email||''; let role='requester', name=email, prof=null;
+      try{ const pr=await sb.from('profiles').select('role,name,active,dept,dept_name,pos,tel').eq('id',s.user.id).single();
+        if(pr&&pr.data){ if(pr.data.active===false){ await sb.auth.signOut(); return; }
+          role=pr.data.role||'requester'; name=pr.data.name||email; prof=pr.data; } }catch(e){}
+      this._authEmail=email; this._authName=name; this._authProfile=prof;
+      let tp=''; try{ tp=new URLSearchParams(location.search).get('track')||''; }catch(e){}
+      this.setState({authed:true,role,page: tp?'tracking':this.roleHome(role),trackQ:tp||'',trackResult:tp||null});
+      this.loadDb();
+    }catch(e){}
   }
   saveSapLocal(){ /* เลิกเก็บ localStorage — ข้อมูล SAP บันทึกลง Supabase ผ่าน persistSap เท่านั้น */ }
   loadSapLocal(){ /* เลิกอ่าน cache ในเครื่อง — โหลด SAP จาก Supabase ผ่าน loadSap() แทน */ }
@@ -292,7 +306,7 @@ class Component extends DCLogic {
   loginScreen(){ const h=React.createElement; const R=this.rp();
     const field=(label,key,type,ph)=>h('div',{style:{marginBottom:18}},
       h('div',{style:{fontSize:13.5,color:this.INK,marginBottom:7,fontWeight:600}},label),
-      h('input',{type:type||'text',value:this.state[key],placeholder:ph,onChange:e=>this.setState({[key]:e.target.value,loginErr:''}),
+      h('input',{type:type||'text',inputMode:key==='loginU'?'email':undefined,autoCapitalize:key==='loginU'?'none':undefined,autoCorrect:key==='loginU'?'off':undefined,value:this.state[key],placeholder:ph,onChange:e=>this.setState({[key]:e.target.value,loginErr:''}),
         onKeyDown:e=>{if(e.key==='Enter')this.login();},
         style:{width:'100%',padding:'13px 15px',border:'1.5px solid '+this.LINE,borderRadius:11,fontSize:14,outline:'none',background:'#fff',boxSizing:'border-box'}}));
     const feat=(emoji,t,s)=>h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:8,width:110,textAlign:'center'}},
@@ -305,7 +319,7 @@ class Component extends DCLogic {
           h('div',{style:{width:64,height:64,borderRadius:14,background:this.TEAL,display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,color:'#fff'}},'🔒'))),
       h('div',{style:{textAlign:'center',fontSize:23,fontWeight:700,letterSpacing:-.3,color:this.INK}},'เข้าสู่ระบบ BRPR'),
       h('div',{style:{textAlign:'center',fontSize:13.5,color:this.MUTE,marginTop:4,marginBottom:26}},'ศูนย์การแพทย์ธรรมศาสตร์'),
-      field('ชื่อผู้ใช้ (Username)','loginU',null,'กรอกชื่อผู้ใช้ของคุณ'),
+      field('อีเมล / ชื่อผู้ใช้','loginU',null,'กรอกอีเมลของคุณ'),
       field('รหัสผ่าน (Password)','loginP','password','กรอกรหัสผ่านของคุณ'),
       this.state.loginErr? h('div',{style:{background:this.REDBG,color:this.RED,fontSize:12.5,padding:'9px 13px',borderRadius:9,marginBottom:14,display:'flex',alignItems:'center',gap:7}},h('span',null,'⚠'),this.state.loginErr):null,
       h('button',{onClick:()=>this.login(),style:{width:'100%',padding:'14px',border:'none',borderRadius:11,background:this.TEAL,color:'#fff',fontSize:15,fontWeight:600,cursor:'pointer',boxShadow:'0 2px 10px rgba(13,110,99,.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}},h('span',null,'→'),'เข้าสู่ระบบ'),
