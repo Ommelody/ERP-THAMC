@@ -119,9 +119,15 @@ class Component extends DCLogic {
       if(r&&r.error){ console.warn(r.error); this.toastMsg('บันทึกไม่สำเร็จ: '+(r.error.message||'')); }
       else { this.logEvent('ตั้งค่า Item Pro API',api||'(เว้นว่าง)',''); this.toastMsg('บันทึกค่า Item Pro API แล้ว'); } }); }
     else this.toastMsg('โหมดสาธิต — ค่าที่ตั้งจะหายเมื่อรีเฟรช'); }
-  async testItemProApi(){ const api=(this.state.itemProApi||'').trim(); if(!api){ this.toastMsg('กรอก URL ก่อนทดสอบ'); return; }
-    const key=(this.state.itemProKey||'').trim(); const hd={'Content-Type':'application/json'}; if(key) hd['Authorization']='Bearer '+key;
+  async testItemProApi(){ const api=(this.state.itemProApi||'').trim(); const anon=(this.state.itemProKey||this.ITEMPRO_ANON||'').trim();
+    if(!api && !anon){ this.toastMsg('⚠ ยังไม่ได้ใส่ anon key ของ Item Pro — ระบบจะใช้ตาราง item_master สำรองในการค้นหา'); return; }
     this.toastMsg('กำลังทดสอบการเชื่อมต่อ…');
+    if(!api && anon){ // ทดสอบอ่านตาราง items ของ Item Pro ตามคู่มือ
+      try{ const r=await fetch(this.ITEMPRO_URL+'/items?select=item_code&limit=1',{headers:{apikey:anon,Authorization:'Bearer '+anon}});
+        this.toastMsg(r.ok? '✓ อ่านตาราง items ของ Item Pro สำเร็จ' : '⚠ Item Pro ตอบ HTTP '+r.status+' — ตรวจสอบ anon key/สิทธิ์'); }
+      catch(e){ this.toastMsg('⚠ เชื่อมต่อไม่สำเร็จ: '+(e.message||e)+' (อาจเกิดจาก CORS)'); }
+      return; }
+    const hd={'Content-Type':'application/json'}; if(anon) hd['Authorization']='Bearer '+anon;
     try{ const r=await fetch(api,{method:'POST',headers:hd,body:JSON.stringify({ping:true,br_id:'TEST',item_name:'ทดสอบการเชื่อมต่อ',status:'test'})});
       this.toastMsg(r.ok? '✓ เชื่อมต่อ Item Pro สำเร็จ (HTTP '+r.status+')' : '⚠ ปลายทางตอบ HTTP '+r.status); }
     catch(e){ this.toastMsg('⚠ เชื่อมต่อไม่สำเร็จ: '+(e.message||e)+' (อาจเกิดจาก CORS หรือ URL ไม่ถูกต้อง)'); } }
@@ -646,15 +652,35 @@ class Component extends DCLogic {
     try{ const r=await sb.from('item_code_requests').select('*').eq('status','issued'); if(r.error||!r.data) return;
       let applied=0;
       r.data.forEach(row=>{ if(!row.code||!row.br_id) return; const b=this.brById(row.br_id);
-        if(b && b.status==='รอออกรหัสพัสดุ'){ this.brReceiveCode(b.id,row.code); applied++; } });
+        if(b && b.status==='รอออกรหัสพัสดุ'){
+          // Item Pro ส่งกลับ 4 ค่า: code, item_name (ชื่อจริงที่ออกรหัส — เขียนทับ), unit, status
+          const patch={code:row.code,hasCode:true,status:'รอเจ้าหน้าที่งบประมาณรับทราบ'};
+          if(row.item_name) patch.itemName=row.item_name;
+          if(row.unit) patch.unit=row.unit;
+          const note='รหัส '+row.code+(row.item_name?' · '+row.item_name:'')+(row.unit?' · หน่วย '+row.unit:'');
+          patch.log=(b.log||[]).concat([{s:'รับรหัสจาก Item Pro',by:'Item Master Pro',at:this.now(),note:note}]);
+          this.persistBr(Object.assign({},b,patch)); applied++; } });
       if(applied>0) this.toastMsg('รับรหัสจาก Item Pro '+applied+' รายการ — เดินขั้นตอนต่อแล้ว');
       else if(!silent) this.toastMsg('ยังไม่มีรหัสใหม่จาก Item Pro');
     }catch(e){ console.warn('syncItemPro',e); }
   }
   startItemProPoll(){ if(this._ipPoll) return; this._ipPoll=setInterval(()=>{ if(this.state.online) this.syncItemPro(true); }, 20000); }
-  // ค้นหารหัสพัสดุแบบ live จากฐานข้อมูลกลาง item_master (Item Master Pro V2 เขียนลง Supabase)
+  // ค้นหาครุภัณฑ์ที่มีรหัสอยู่แล้ว — อ่านตรงจากตาราง items ของ Item Pro (คนละ Supabase project)
+  ITEMPRO_URL='https://szoxfjzkdwurxlvevkjs.supabase.co/rest/v1';
+  ITEMPRO_ANON='';  // ใส่ anon key ของ Item Pro — เว้นว่างจะ fallback ไปอ่าน item_master ใน Supabase ของ BRPR
   searchItemMaster(q){ clearTimeout(this._imT); const term=(q||'').trim();
-    this._imT=setTimeout(async ()=>{ const sb=this._sb;
+    this._imT=setTimeout(async ()=>{
+      const anon=(this.state.itemProKey||this.ITEMPRO_ANON||'').trim();
+      // (1) อ่านจาก Item Pro โดยตรง ถ้ามี anon key
+      if(anon){
+        try{ const p=new URLSearchParams({u_ntt_asset_pur:'like.8*',is_inactive:'eq.false',select:'item_code,item_name,inventory_uom,sys_uom_name',limit:'20'});
+          if(term) p.set('item_name','ilike.*'+term+'*');
+          const r=await fetch(this.ITEMPRO_URL+'/items?'+p.toString(),{headers:{apikey:anon,Authorization:'Bearer '+anon}});
+          if(r.ok){ const d=await r.json();
+            this.setState({itemMasterResults:(d||[]).map(x=>({code:x.item_code,name:x.item_name,unit:x.inventory_uom||x.sys_uom_name||'',category:''})),itemMasterErr:false}); return; } }catch(e){ console.warn('itempro items',e); }
+      }
+      // (2) fallback — ตาราง item_master บน Supabase ของ BRPR
+      const sb=this._sb;
       if(!sb||!this.state.online){ this.setState({itemMasterResults:null,itemMasterErr:false}); return; }
       try{ let query=sb.from('item_master').select('code,name,category,unit').limit(40);
         if(term){ const esc=term.replace(/[%,]/g,' '); query=query.or('name.ilike.%'+esc+'%,code.ilike.%'+esc+'%,category.ilike.%'+esc+'%'); }
@@ -2460,18 +2486,17 @@ class Component extends DCLogic {
     const numInp=(v,on)=>h('input',{type:'number',value:v,onChange:e=>on(Math.max(0,parseInt(e.target.value||'0',10))),style:{width:80,border:'1px solid '+this.LINE,borderRadius:8,padding:'8px 10px',fontSize:13.5,fontFamily:"'IBM Plex Mono',monospace",outline:'none',textAlign:'center'}});
     return h('div',null,
       this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
-        this.secTitle('เชื่อมต่อ Item Master Pro (API)',
-          h('span',{style:{fontSize:12,fontWeight:600,color:(this.state.itemProApi||'').trim()?this.GREEN:this.AMBER}},(this.state.itemProApi||'').trim()?'● ตั้งค่าแล้ว':'● ยังไม่ได้ตั้งค่า')),
-        h('div',{style:{fontSize:12.5,color:this.MUTE,lineHeight:1.7,marginBottom:13}},'เมื่อกด “ส่งขอออกรหัสใหม่” ระบบจะยิง HTTP POST ไปยัง URL นี้ หากเว้นว่าง ระบบจะบันทึกคำขอลงคิว Item Pro บน Supabase (ตาราง item_code_requests) แทน'),
+        this.secTitle('เชื่อมต่อ Item Master Pro',
+          h('span',{style:{fontSize:12,fontWeight:600,color:(this.state.itemProKey||'').trim()?this.GREEN:this.AMBER}},(this.state.itemProKey||'').trim()?'● ค้นหาครุภัณฑ์ตรงจาก Item Pro':'● ใช้ตารางสำรอง (item_master)')),
+        h('div',{style:{fontSize:12.5,color:this.MUTE,lineHeight:1.7,marginBottom:13}},'การขอออกรหัสใช้ตาราง item_code_requests บน Supabase ของ BRPR เป็นช่องทางหลัก (ไม่ต้องใส่ URL) — ช่อง anon key ด้านล่างใช้เฉพาะสำหรับค้นหาครุภัณฑ์ที่มีรหัสแล้วจากตาราง items ของ Item Pro'),
         h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'2fr 1fr',gap:12,marginBottom:13}},
-          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'API Endpoint (URL)'),
-            h('input',{value:this.state.itemProApi||'',onChange:e=>this.setState({itemProApi:e.target.value}),placeholder:'https://itempro.example/api/code-request',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13,outline:'none',fontFamily:"'IBM Plex Mono',monospace",boxSizing:'border-box'}})),
-          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'API Key / Token (ถ้ามี)'),
-            h('input',{type:'password',value:this.state.itemProKey||'',onChange:e=>this.setState({itemProKey:e.target.value}),placeholder:'••••••••',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13,outline:'none',boxSizing:'border-box'}}))),
+          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'REST Endpoint (เว้นว่าง = ใช้ตาราง item_code_requests)'),
+            h('input',{value:this.state.itemProApi||'',onChange:e=>this.setState({itemProApi:e.target.value}),placeholder:'เว้นว่างไว้ — ตามคู่มือ ITEMPRO_API.md',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13,outline:'none',fontFamily:"'IBM Plex Mono',monospace",boxSizing:'border-box'}})),
+          h('div',null,h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5}},'Item Pro anon key (ค้นครุภัณฑ์)'),
+            h('input',{type:'password',value:this.state.itemProKey||'',onChange:e=>this.setState({itemProKey:e.target.value}),placeholder:'eyJhbGci…',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13,outline:'none',boxSizing:'border-box'}}))),
         h('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
           h('button',{onClick:()=>this.saveItemProApi(),style:{padding:'10px 20px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'บันทึกการตั้งค่า'),
-          h('button',{onClick:()=>this.testItemProApi(),style:{padding:'10px 18px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'ทดสอบการเชื่อมต่อ'))),{marginBottom:16}),
-      this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
+          h('button',{onClick:()=>this.testItemProApi(),style:{padding:'10px 18px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'ทดสอบการเชื่อมต่อ'))),{marginBottom:16}),      this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
         this.secTitle('ตั้งค่าการแจ้งเตือนกำหนดทำ PR','บันทึกอัตโนมัติ'),
         h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:16,lineHeight:1.6}},'กำหนดจำนวนวันล่วงหน้าก่อนถึง "วันที่ต้องการใช้พัสดุ" ที่ระบบจะเริ่มแจ้งเตือนให้เร่งทำ PR — แยกตามวงเงินของคำขอ'),
         h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr',gap:14}},
