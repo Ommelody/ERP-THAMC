@@ -119,18 +119,16 @@ class Component extends DCLogic {
       if(r&&r.error){ console.warn(r.error); this.toastMsg('บันทึกไม่สำเร็จ: '+(r.error.message||'')); }
       else { this.logEvent('ตั้งค่า Item Pro API',api||'(เว้นว่าง)',''); this.toastMsg('บันทึกค่า Item Pro API แล้ว'); } }); }
     else this.toastMsg('โหมดสาธิต — ค่าที่ตั้งจะหายเมื่อรีเฟรช'); }
-  async testItemProApi(){ const api=(this.state.itemProApi||'').trim(); const anon=(this.state.itemProKey||this.ITEMPRO_ANON||'').trim();
-    if(!api && !anon){ this.toastMsg('⚠ ยังไม่ได้ใส่ anon key ของ Item Pro — ระบบจะใช้ตาราง item_master สำรองในการค้นหา'); return; }
-    this.toastMsg('กำลังทดสอบการเชื่อมต่อ…');
-    if(!api && anon){ // ทดสอบอ่านตาราง items ของ Item Pro ตามคู่มือ
-      try{ const r=await fetch(this.ITEMPRO_URL+'/items?select=item_code&limit=1',{headers:{apikey:anon,Authorization:'Bearer '+anon}});
-        this.toastMsg(r.ok? '✓ อ่านตาราง items ของ Item Pro สำเร็จ' : '⚠ Item Pro ตอบ HTTP '+r.status+' — ตรวจสอบ anon key/สิทธิ์'); }
-      catch(e){ this.toastMsg('⚠ เชื่อมต่อไม่สำเร็จ: '+(e.message||e)+' (อาจเกิดจาก CORS)'); }
-      return; }
-    const hd={'Content-Type':'application/json'}; if(anon) hd['Authorization']='Bearer '+anon;
-    try{ const r=await fetch(api,{method:'POST',headers:hd,body:JSON.stringify({ping:true,br_id:'TEST',item_name:'ทดสอบการเชื่อมต่อ',status:'test'})});
-      this.toastMsg(r.ok? '✓ เชื่อมต่อ Item Pro สำเร็จ (HTTP '+r.status+')' : '⚠ ปลายทางตอบ HTTP '+r.status); }
-    catch(e){ this.toastMsg('⚠ เชื่อมต่อไม่สำเร็จ: '+(e.message||e)+' (อาจเกิดจาก CORS หรือ URL ไม่ถูกต้อง)'); } }
+  async testItemProApi(){ const anon=(this.state.itemProKey||this.ITEMPRO_ANON||'').trim();
+    if(!anon){ this.setState({itemProDiag:{ok:false,msg:'ยังไม่ได้ใส่ anon key ของ Item Pro'}}); return; }
+    this.setState({itemProDiag:{ok:null,msg:'กำลังทดสอบ…'}});
+    const url=this.ITEMPRO_URL+'/items?select=item_code,item_name&limit=1';
+    try{ const r=await fetch(url,{headers:{apikey:anon,Authorization:'Bearer '+anon}});
+      const txt=await r.text();
+      if(r.ok){ let n=0; try{ n=(JSON.parse(txt)||[]).length; }catch(e){}
+        this.setState({itemProDiag:{ok:true,msg:'✓ เชื่อมต่อสำเร็จ (HTTP '+r.status+') — อ่านตาราง items ได้ '+n+' แถวตัวอย่าง'}}); }
+      else this.setState({itemProDiag:{ok:false,msg:'HTTP '+r.status+' — '+(txt||'ไม่มีรายละเอียด'),url:url}});
+    }catch(e){ this.setState({itemProDiag:{ok:false,msg:'เรียก URL ไม่สำเร็จ: '+(e.message||e)+' — มักเกิดจาก CORS (ต้องอนุญาตโดเมนนี้ในฝั่ง Item Pro) หรือ key ไม่ถูกต้อง',url:url}}); } }
   addExp(){ const v=(this.state.newExp||'').trim(); if(!v){ this.toastMsg('กรุณากรอกชื่อประเภทพัสดุ'); return; }
     if((this.D.exps||[]).includes(v)){ this.toastMsg('มีประเภทนี้อยู่แล้ว'); return; }
     this.D.exps=(this.D.exps||[]).concat([v]); this.saveExps(); this.setState({newExp:''}); this.toastMsg('เพิ่มประเภทพัสดุ "'+v+'" แล้ว'); }
@@ -802,9 +800,9 @@ class Component extends DCLogic {
     // fallback (โหมดสาธิต / RPC ยังไม่ได้ติดตั้ง)
     this.persistBr(Object.assign({},b,{status:'จัดสรรงบแล้ว',code:code,hasCode:true,log:(b.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code}])})); this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg('จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); }
   brRequestCode(id){ const b=this.brById(id); if(!b)return;
-    const payload={ br_id:id, item_name:b.itemName, qty:b.qty, unit:b.unit, dept:b.dept, dept_name:b.dn,
-      budget_code:b.budgetCode||'', budget_plan:b.budgetPlan||'', value:b.value,
-      requested_by:this.role().user.name, requested_at:this.now(), status:'requested' };
+    // payload ตรงกับ schema ใน ITEMPRO_API.md เท่านั้น (ส่งคอลัมน์เกิน = insert ถูกปฏิเสธ)
+    const payload={ br_id:id, item_name:b.itemName||'', requested_by:(b.dn||b.dept||this._authName||this.role().user.name), status:'requested' };
+    if(b.unit) payload.unit=b.unit;
     this.persistBr(Object.assign({},b,{status:'รอออกรหัสพัสดุ',log:(b.log||[]).concat([{s:'ส่งออกรหัส (Item Pro)',by:this.role().user.name,at:this.now(),note:'ส่ง API ขอออกรหัสพัสดุใหม่ไปยัง Item Master Pro'}])}));
     this.setState({itemProModal:null});
     // 1) ส่ง API จริงไปปลายทาง Item Pro ถ้ากำหนด endpoint ไว้ (จากหน้าตั้งค่าระบบ หรือค่าในโค้ด)
@@ -821,17 +819,20 @@ class Component extends DCLogic {
       this._icrFallback(payload);
     }
   }
-  _icrFallback(payload){ const sb=this._sb;
-    if(!sb||!this.state.online){ this.toastMsg('อยู่ในโหมดสาธิต — บันทึกคำขอในเครื่องแล้ว (ยังไม่ส่งขึ้นฐานข้อมูล)'); return; }
-    sb.from('item_code_requests').insert(payload).then(r=>{
-      if(r&&r.error){
-        // ตารางเดิมอาจยังไม่มีคอลัมน์ใหม่ — ลองส่งเฉพาะคอลัมน์พื้นฐาน
-        const base={br_id:payload.br_id,item_name:payload.item_name,requested_by:payload.requested_by,status:'requested'};
-        sb.from('item_code_requests').insert(base).then(r2=>{
-          if(r2&&r2.error){ console.warn(r2.error); this.toastMsg('ส่งไม่สำเร็จ: '+(r2.error.message||'ตรวจสอบตาราง item_code_requests / สิทธิ์ RLS')); }
-          else this.toastMsg('ส่งคำขอออกรหัสเข้าคิว Item Pro แล้ว (โหมดคอลัมน์พื้นฐาน — แนะนำรัน ALTER เพิ่มคอลัมน์)');
-        });
-      } else { this.toastMsg('ส่งคำขอออกรหัสเข้าคิว Item Master Pro แล้ว ✓'); }
+  _icrFallback(payload){ const sb=this.initDb();
+    if(!sb||!this.state.online){ this.toastMsg('⚠ ไม่ได้เชื่อมต่อฐานข้อมูล — คำขอยังไม่ถูกส่งไป Item Pro'); return; }
+    sb.from('item_code_requests').insert(payload).select().then(r=>{
+      if(r&&r.error){ console.warn('icr insert',r.error);
+        const m=(r.error.message||'')+' '+(r.error.code||'');
+        const hint=/row-level security|permission/i.test(m)
+          ? '— สิทธิ์ RLS บนตาราง item_code_requests ไม่อนุญาตให้บทบาทนี้เขียน (รัน supabase-hardening.sql เวอร์ชันล่าสุด)'
+          : /column|PGRST204/i.test(m) ? '— คอลัมน์ในตารางไม่ตรงกับคู่มือ ITEMPRO_API.md' : '';
+        this.toastMsg('✗ ส่งคำขอไม่สำเร็จ: '+(r.error.message||r.error.code||'')+' '+hint);
+        this.logEvent('ส่งขอออกรหัสไม่สำเร็จ',payload.br_id,r.error.message||'');
+        return; }
+      this.logEvent('ส่งขอออกรหัสไป Item Pro',payload.br_id,payload.item_name||'');
+      this.toastMsg('✓ ส่งคำขอออกรหัสเข้าคิว Item Master Pro แล้ว ('+payload.br_id+')');
+      this.loadIcr&&this.loadIcr();
     }); }
   brReceiveCode(id,code){ const b=this.brById(id); if(!b)return; this.persistBr(Object.assign({},b,{status:'รอเจ้าหน้าที่งบประมาณรับทราบ',code:code,hasCode:true,log:(b.log||[]).concat([{s:'รับรหัสจาก Item Pro',by:'ระบบ Item Master Pro',at:this.now(),note:'ออกรหัส '+code+' เรียบร้อย'}])})); this.setState({itemProModal:null}); this.toastMsg('รับรหัส '+code+' จาก Item Pro แล้ว'); }
   // Copy to PR — สร้างใบขอซื้อจาก BR ที่จัดสรรงบแล้ว
@@ -2496,7 +2497,10 @@ class Component extends DCLogic {
             h('input',{type:'password',value:this.state.itemProKey||'',onChange:e=>this.setState({itemProKey:e.target.value}),placeholder:'eyJhbGci…',style:{width:'100%',border:'1px solid '+this.LINE,borderRadius:9,padding:'10px 12px',fontSize:13,outline:'none',boxSizing:'border-box'}}))),
         h('div',{style:{display:'flex',gap:10,flexWrap:'wrap'}},
           h('button',{onClick:()=>this.saveItemProApi(),style:{padding:'10px 20px',border:'none',background:this.TEAL,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'บันทึกการตั้งค่า'),
-          h('button',{onClick:()=>this.testItemProApi(),style:{padding:'10px 18px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'ทดสอบการเชื่อมต่อ'))),{marginBottom:16}),      this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
+          h('button',{onClick:()=>this.testItemProApi(),style:{padding:'10px 18px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'ทดสอบการเชื่อมต่อ')),
+        this.state.itemProDiag? h('div',{style:{marginTop:13,padding:'11px 14px',borderRadius:9,background:this.state.itemProDiag.ok===true?this.GREENBG:this.state.itemProDiag.ok===false?'#fdeceb':this.PANEL,border:'1px solid '+(this.state.itemProDiag.ok===true?'#b6e0cd':this.state.itemProDiag.ok===false?'#f3c9c5':this.LINE)}},
+          h('div',{style:{fontSize:12.5,lineHeight:1.65,color:this.INK,wordBreak:'break-word'}},this.state.itemProDiag.msg),
+          this.state.itemProDiag.url? h('div',{style:{fontSize:11,color:this.MUTE,marginTop:6,fontFamily:"'IBM Plex Mono',monospace",wordBreak:'break-all'}},this.state.itemProDiag.url):null):null),{marginBottom:16}),      this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
         this.secTitle('ตั้งค่าการแจ้งเตือนกำหนดทำ PR','บันทึกอัตโนมัติ'),
         h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:16,lineHeight:1.6}},'กำหนดจำนวนวันล่วงหน้าก่อนถึง "วันที่ต้องการใช้พัสดุ" ที่ระบบจะเริ่มแจ้งเตือนให้เร่งทำ PR — แยกตามวงเงินของคำขอ'),
         h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr',gap:14}},
