@@ -56,7 +56,7 @@ class Component extends DCLogic {
     brCreatedFlash:false, prCreatedFlash:false,
     poBindModal:null, poBindInput:'', poDocs:[],
     allocModal:null, itemProModal:null, itemProQ:'', itemProResult:null, allocCode:'', ackModal:null,
-    itemMasterResults:null, itemMasterErr:false,
+    itemMasterResults:null, itemMasterErr:false, imLookup:null, imQ:'', imSel:null,
     docModal:null, docType:null,
     trackQ:'', trackResult:null, scanModal:false,
     exportModal:null,
@@ -380,7 +380,8 @@ class Component extends DCLogic {
       this.state.docModal? this.docModal2():null,
       this.state.scanModal? this.scanSheet():null,
       this.state.exportModal? this.exportSheet():null,
-      this.state.cmtModal? this.cmtSheet():null); }
+      this.state.cmtModal? this.cmtSheet():null,
+      this.state.imLookup? this.itemLookupSheet():null); }
 
   brand(dark){ const h=React.createElement;
     return h('div',{style:{display:'flex',alignItems:'center',gap:11}},
@@ -977,6 +978,50 @@ class Component extends DCLogic {
     this.persistPr(Object.assign({},p,{po:poNo,status:'ออกใบสั่งซื้อ',docs,vendor:rec?rec.vn:p.vendor,log}));
     this.setState({poBindModal:null,poBindInput:'',poDocs:[]});
     this.toastMsg(rec? 'บันทึกเลข PO '+poNo+' — ดึงข้อมูล SAP เดินไทม์ไลน์ต่ออัตโนมัติ' : 'บันทึกเลข PO '+poNo+' แล้ว'); }
+  // ---------- ค้นหารหัสพัสดุจากฐานข้อมูล (ป๊อปอัปรายละเอียด → เลือกรายการ) ----------
+  openItemLookup(target,idx){ this.setState({imLookup:{target:target,idx:idx},imQ:'',imSel:null}); this.searchItemMaster(''); }
+  closeItemLookup(){ this.setState({imLookup:null,imQ:'',imSel:null}); }
+  applyItemPick(){ const lk=this.state.imLookup; const it=this.state.imSel; if(!lk||!it) return;
+    const patch={d:it.name||'',c:it.code||'',u:it.unit||''};
+    if(lk.target==='pr') this.updItem(lk.idx,patch); else this.updBrItem(lk.idx,patch);
+    this.closeItemLookup(); this.toastMsg('✓ เลือกรายการ '+(it.code||'')+' — '+(it.name||'')); }
+  itemLookupSheet(){ const h=React.createElement; const R=this.R; const lk=this.state.imLookup; if(!lk) return null;
+    const q=this.state.imQ||''; const sel=this.state.imSel;
+    const live=this.state.itemMasterResults; const connected=Array.isArray(live);
+    const qq=q.trim().toLowerCase();
+    let results=[];
+    if(connected) results=live;
+    else results=((this.D.itemMaster)||[]).filter(x=>!qq||((x.name||'')+' '+(x.code||'')).toLowerCase().includes(qq)).slice(0,40);
+    const close=()=>this.closeItemLookup();
+    return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.5)',zIndex:88,display:'flex',alignItems:R.isMobile?'flex-end':'center',justifyContent:'center',padding:R.isMobile?0:20,animation:'overlayIn .15s'}},
+      h('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:R.isMobile?'18px 18px 0 0':16,width:R.isMobile?'100%':560,maxHeight:'92vh',overflowY:'auto',padding:'22px 22px 24px',boxShadow:'0 24px 60px rgba(10,25,22,.3)',animation:'sheetIn .22s'}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',gap:10,marginBottom:5}},
+          h('div',{style:{fontSize:17,fontWeight:700}},'ค้นหารหัสพัสดุ'),
+          h('button',{onClick:close,style:{border:'1px solid '+this.LINE,background:'#fff',width:32,height:32,borderRadius:8,cursor:'pointer',fontSize:15,color:this.MUTE}},'✕')),
+        h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:13,display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}},
+          h('span',null,'ค้นจากรหัสหรือชื่อพัสดุ → ดูรายละเอียด → กด “เลือกรายการ”'),
+          connected? h('span',{style:{fontSize:10.5,color:this.GREEN,fontWeight:600}},'● เชื่อมฐานข้อมูล ('+results.length+')') : h('span',{style:{fontSize:10.5,color:this.AMBER,fontWeight:600}},'○ โหมดสำรอง (ข้อมูลตั้งต้น)')),
+        h('input',{value:q,autoFocus:true,onChange:e=>{const v=e.target.value; this.setState({imQ:v,imSel:null}); this.searchItemMaster(v);},placeholder:'พิมพ์รหัสหรือชื่อพัสดุ เช่น เครื่องคอมพิวเตอร์ หรือ 8136…',
+          style:{width:'100%',padding:'11px 13px',border:'1.5px solid '+this.LINE,borderRadius:10,fontSize:14,outline:'none',marginBottom:13,boxSizing:'border-box'}}),
+        h('div',{style:{maxHeight:sel?200:330,overflowY:'auto',display:'flex',flexDirection:'column',gap:7,marginBottom:sel?14:0}},
+          results.length? results.map((x,i)=>{ const on=sel&&sel.code===x.code;
+            return h('div',{key:i,onClick:()=>this.setState({imSel:x}),style:{cursor:'pointer',display:'flex',alignItems:'center',gap:11,padding:'10px 12px',border:'1.5px solid '+(on?this.TEAL:this.LINE),background:on?this.GREENBG:'#fff',borderRadius:10}},
+              h('div',{style:{flex:1,minWidth:0}},
+                h('div',{style:{fontSize:13,fontWeight:600,color:this.INK,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},x.name||'—'),
+                h('div',{style:{fontSize:11,color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace",marginTop:2}},(x.code||'—')+(x.unit?'  ·  '+x.unit:''))),
+              on? h('span',{style:{color:this.TEAL,fontWeight:700,fontSize:15}},'✓'):null); })
+          : h('div',{style:{padding:'26px 12px',textAlign:'center',color:this.MUTE,fontSize:12.5}},q?'ไม่พบพัสดุที่ตรงกับคำค้น':'พิมพ์คำค้นเพื่อค้นหารหัสพัสดุ')),
+        sel? h('div',{style:{background:this.PANEL,border:'1px solid '+this.LINE,borderRadius:12,padding:'15px 16px'}},
+          h('div',{style:{fontSize:11,fontWeight:600,color:this.MUTE,textTransform:'uppercase',letterSpacing:.5,marginBottom:10}},'รายละเอียดพัสดุ'),
+          h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr',gap:12}},
+            h('div',{style:{gridColumn:R.isMobile?'auto':'1 / -1'}},h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'ชื่อพัสดุ'),h('div',{style:{fontSize:13.5,fontWeight:600}},sel.name||'—')),
+            h('div',null,h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'รหัสพัสดุ'),h('div',{style:{fontSize:13.5,fontWeight:600,fontFamily:"'IBM Plex Mono',monospace",color:this.TEAL}},sel.code||'—')),
+            h('div',null,h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'หน่วยนับ'),h('div',{style:{fontSize:13.5,fontWeight:600}},sel.unit||'—')),
+            sel.category? h('div',{style:{gridColumn:R.isMobile?'auto':'1 / -1'}},h('div',{style:{fontSize:11,color:this.MUTE,marginBottom:3}},'หมวดพัสดุ'),h('div',{style:{fontSize:13}},sel.category)):null),
+          h('div',{style:{display:'flex',gap:10,marginTop:16}},
+            h('button',{onClick:()=>this.setState({imSel:null}),style:{flex:1,padding:'11px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13,color:this.INK,cursor:'pointer',fontWeight:500}},'เลือกรายการอื่น'),
+            h('button',{onClick:()=>this.applyItemPick(),style:{flex:1.6,padding:'11px',border:'none',background:this.TEAL,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'✓ เลือกรายการนี้')))
+        : null)); }
   addPoDoc(){ this.pickFiles('ใบสั่งซื้อ (PO)',nd=>this.setState({poDocs:(this.state.poDocs||[]).concat(nd)})); }
   // ---------- เปลี่ยนกรรมการตรวจรับ (แนบเอกสารเพิ่มเติมได้) ----------
   openCmt(id){ const p=this.prById(id); if(!p) return;
@@ -1456,7 +1501,9 @@ class Component extends DCLogic {
     const gcol='1fr 96px 58px 64px 96px 96px 30px';
     const rows=(d.items||[]).map((it,i)=>h('div',{key:i,style:{display:'grid',gridTemplateColumns:gcol,padding:'8px 12px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',gap:5}},
       h('input',{value:it.d||'',placeholder:'ชื่อรายการ…',onChange:e=>this.updBrItem(i,{d:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 9px',fontSize:12.5,outline:'none'}}),
-      h('input',{value:it.c||'',placeholder:'รหัส',onChange:e=>this.updBrItem(i,{c:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:11.5,outline:'none',fontFamily:"'IBM Plex Mono',monospace"}}),
+      h('div',{style:{display:'flex',gap:4,alignItems:'center',minWidth:0}},
+        h('input',{value:it.c||'',placeholder:'รหัส',onChange:e=>this.updBrItem(i,{c:e.target.value}),style:{flex:1,minWidth:0,border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:11.5,outline:'none',fontFamily:"'IBM Plex Mono',monospace"}}),
+        h('button',{onClick:()=>this.openItemLookup('br',i),title:'ค้นหารหัสพัสดุจากฐานข้อมูล',style:{border:'1px solid '+this.TEAL,background:this.GREENBG,color:this.TEAL,borderRadius:7,width:28,height:30,flexShrink:0,cursor:'pointer',fontSize:14,fontWeight:700,lineHeight:1,padding:0}},'⌕')),
       h('input',{value:it.qty,onChange:e=>this.updBrItem(i,{qty:e.target.value.replace(/[^0-9.]/g,'')}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 6px',fontSize:12.5,outline:'none',textAlign:'center'}}),
       h('input',{value:it.u||'',placeholder:'หน่วย',onChange:e=>this.updBrItem(i,{u:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 7px',fontSize:12,outline:'none'}}),
       h('input',{value:it.price,onChange:e=>this.updBrItem(i,{price:e.target.value.replace(/[^0-9.]/g,'')}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:12.5,outline:'none',textAlign:'right',fontFamily:"'IBM Plex Mono',monospace"}}),
@@ -2255,7 +2302,9 @@ class Component extends DCLogic {
     const gcol='1fr 96px 58px 64px 96px 44px 96px 30px';
     const itemRows=(d.items||[]).map((it,i)=>h('div',{key:i,style:{display:'grid',gridTemplateColumns:gcol,padding:'8px 12px',borderTop:'1px solid #f0f3f2',fontSize:12.5,alignItems:'center',gap:5}},
       h('input',{value:it.d||'',placeholder:'ชื่อรายการ…',onChange:e=>this.updItem(i,{d:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 9px',fontSize:12.5,outline:'none'}}),
-      h('input',{value:it.c||'',placeholder:'รหัส',onChange:e=>this.updItem(i,{c:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:11.5,outline:'none',fontFamily:"'IBM Plex Mono',monospace"}}),
+      h('div',{style:{display:'flex',gap:4,alignItems:'center',minWidth:0}},
+        h('input',{value:it.c||'',placeholder:'รหัส',onChange:e=>this.updItem(i,{c:e.target.value}),style:{flex:1,minWidth:0,border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:11.5,outline:'none',fontFamily:"'IBM Plex Mono',monospace"}}),
+        h('button',{onClick:()=>this.openItemLookup('pr',i),title:'ค้นหารหัสพัสดุจากฐานข้อมูล',style:{border:'1px solid '+this.TEAL,background:this.GREENBG,color:this.TEAL,borderRadius:7,width:28,height:30,flexShrink:0,cursor:'pointer',fontSize:14,fontWeight:700,lineHeight:1,padding:0}},'⌕')),
       h('input',{value:it.qty,onChange:e=>this.updItem(i,{qty:e.target.value.replace(/[^0-9.]/g,'')}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 6px',fontSize:12.5,outline:'none',textAlign:'center'}}),
       h('input',{value:it.u||'',placeholder:'หน่วย',onChange:e=>this.updItem(i,{u:e.target.value}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 7px',fontSize:12,outline:'none'}}),
       h('input',{value:it.price,onChange:e=>this.updItem(i,{price:e.target.value.replace(/[^0-9.]/g,'')}),style:{border:'1px solid '+this.LINE,borderRadius:7,padding:'7px 8px',fontSize:12.5,outline:'none',textAlign:'right',fontFamily:"'IBM Plex Mono',monospace"}}),
