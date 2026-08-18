@@ -466,6 +466,7 @@ class Component extends DCLogic {
     'po-verify':{t:'ตรวจสอบเอกสารใบสั่งซื้อ',s:'ซิงค์เอกสาร SAP · จับคู่ PO ↔ รับของ ↔ ตั้งหนี้ ↔ จ่าย'},
     'tracking':{t:'ติดตามสถานะ',s:'ค้นเลขเอกสาร / สแกน QR ดูไทม์ไลน์เต็ม'},
     'pay-track':{t:'ติดตามสถานะการจ่ายเงิน',s:'ใบตั้งหนี้ค้างจ่ายและประวัติการจ่าย'},
+    'br-bk06':{t:'แบบ บก.06',s:'ตารางแสดงวงเงินงบประมาณที่ได้รับจัดสรรและรายละเอียดค่าใช้จ่าย'},
     'registry':{t:'ทะเบียนเอกสาร',s:'คำขอ BR/PR ทั้งหมดในระบบ'},
     'reports':{t:'รายงาน + Export SAP',s:'ส่งออกรหัส 19 คอลัมน์ นำเข้า SAP'},
     'audit-log':{t:'บันทึกการใช้งาน (Audit Log)',s:'ประวัติการดำเนินการทุกขั้นตอนของคำขอ BR/PR ทั้งระบบ'}
@@ -540,6 +541,7 @@ class Component extends DCLogic {
       case 'dash-cost': return this.pgDashCost();
       case 'dash-payment': return this.pgDashPayment();
       case 'br-create': return this.pgBrCreate();
+      case 'br-bk06': return this.pgBk06();
       case 'my-requests': return this.pgMyRequests();
       case 'pr-create': return this.pgPrCreate();
       case 'item-pro': return this.pgItemPro();
@@ -640,8 +642,8 @@ class Component extends DCLogic {
         : h('div',{style:{padding:'34px 20px',textAlign:'center',color:this.MUTE,fontSize:13}},'✓ ไม่มีรายการใกล้ครบกำหนดในบทบาทนี้')));
     return h('div',{onClick:close,style:{position:'fixed',inset:0,zIndex:75,background:R.isMobile?'rgba(10,25,22,.4)':'transparent',display:'flex',alignItems:R.isMobile?'flex-end':'flex-start',justifyContent:R.isMobile?'center':'flex-end',padding:R.isMobile?0:'72px 20px 0',animation:'overlayIn .12s'}}, body); }
   initDb(){ if(!this._sb && window.supabase){ try{ this._sb=window.supabase.createClient(this.SUPA_URL,this.SUPA_KEY); }catch(e){ this._sb=null; } } return this._sb; }
-  brToDb(b){ return {id:b.id,at:b.at,fy:b.fy||this.fyOfThai(b.at)||this.fyNow(),requester:b.requester,email:b.email||b.requester,owner_email:this._authEmail||b.email||null,dept:b.dept,dn:b.dn,tel:b.tel,pos:b.pos,item_name:b.itemName,reason:b.reason,qty:b.qty,unit:b.unit,value:b.value,needed_date:b.neededDate,cat:b.cat,proc_type:b.procType,med:!!b.med,has_code:!!b.hasCode,code:b.code||'',status:b.status,budget_type:b.budgetType,budget_name:b.budgetName,pr_id:b.prId||'',log:b.log||[]}; }
-  brFromDb(r){ return {kind:'br',id:r.id,at:r.at,fy:r.fy?Number(r.fy):null,requester:r.requester,email:r.email,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,itemName:r.item_name,reason:r.reason,qty:Number(r.qty),unit:r.unit,value:Number(r.value),neededDate:r.needed_date,cat:r.cat,procType:r.proc_type,med:r.med,hasCode:r.has_code,code:r.code,status:r.status,budgetType:r.budget_type,budgetName:r.budget_name,prId:r.pr_id,log:r.log||[]}; }
+  brToDb(b){ return {id:b.id,at:b.at,bk06:b.bk06||null,fy:b.fy||this.fyOfThai(b.at)||this.fyNow(),requester:b.requester,email:b.email||b.requester,owner_email:this._authEmail||b.email||null,dept:b.dept,dn:b.dn,tel:b.tel,pos:b.pos,item_name:b.itemName,reason:b.reason,qty:b.qty,unit:b.unit,value:b.value,needed_date:b.neededDate,cat:b.cat,proc_type:b.procType,med:!!b.med,has_code:!!b.hasCode,code:b.code||'',status:b.status,budget_type:b.budgetType,budget_name:b.budgetName,pr_id:b.prId||'',log:b.log||[]}; }
+  brFromDb(r){ return {kind:'br',id:r.id,at:r.at,bk06:r.bk06||null,fy:r.fy?Number(r.fy):null,requester:r.requester,email:r.email,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,itemName:r.item_name,reason:r.reason,qty:Number(r.qty),unit:r.unit,value:Number(r.value),neededDate:r.needed_date,cat:r.cat,procType:r.proc_type,med:r.med,hasCode:r.has_code,code:r.code,status:r.status,budgetType:r.budget_type,budgetName:r.budget_name,prId:r.pr_id,log:r.log||[]}; }
   prToDb(p){ return {id:p.id,br_id:p.brId,fy:p.fy||this.fyOfThai(p.at)||this.fyNow(),requester:p.requester,owner_email:this._authEmail||null,dept:p.dept,dn:p.dn,tel:p.tel,pos:p.pos,items:p.items,sub:p.sub,vat:p.vat,total:p.total,cat:p.cat,exp:p.exp,proc_type:p.procType,urgency:p.urgency,reason:p.reason,committee:p.committee,condition:p.condition||'',po:p.po||'',vendor:p.vendor||'',docs:p.docs||[],status:p.status,at:p.at,needed_date:p.neededDate,cmt_history:p.cmtHistory||[],log:p.log||[]}; }
   prFromDb(r){ return {kind:'pr',id:r.id,brId:r.br_id,fy:r.fy?Number(r.fy):null,requester:r.requester,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,items:r.items||[],sub:Number(r.sub),vat:Number(r.vat),total:Number(r.total),cat:r.cat,exp:r.exp,procType:r.proc_type,urgency:r.urgency,reason:r.reason,committee:r.committee||[],condition:r.condition,po:r.po,vendor:r.vendor,docs:r.docs||[],status:r.status,at:r.at,neededDate:r.needed_date,budgetCode:r.budget_code||'',cmtHistory:r.cmt_history||[],log:r.log||[]}; }
   async loadDb(){
@@ -694,7 +696,7 @@ class Component extends DCLogic {
       const anon=(this.state.itemProKey||this.ITEMPRO_ANON||'').trim();
       // (1) อ่านจาก Item Pro โดยตรง ถ้ามี anon key
       if(anon){
-        try{ const p=new URLSearchParams({u_ntt_asset_pur:'like.8*',is_inactive:'eq.false',select:'item_code,item_name,inventory_uom,sys_uom_name',limit:'20'});
+        try{ const p=new URLSearchParams({u_ntt_asset_pur:'like.8*',is_inactive:'eq.false',select:'item_code,item_name,inventory_uom,sys_uom_name',limit:'200'});
           if(term) p.set('item_name','ilike.*'+term+'*');
           const r=await fetch(this.ITEMPRO_URL+'/items?'+p.toString(),{headers:{apikey:anon,Authorization:'Bearer '+anon}});
           if(r.ok){ const d=await r.json();
@@ -703,7 +705,7 @@ class Component extends DCLogic {
       // (2) fallback — ตาราง item_master บน Supabase ของ BRPR
       const sb=this._sb;
       if(!sb||!this.state.online){ this.setState({itemMasterResults:null,itemMasterErr:false}); return; }
-      try{ let query=sb.from('item_master').select('code,name,category,unit').limit(40);
+      try{ let query=sb.from('item_master').select('code,name,category,unit').limit(200);
         if(term){ const esc=term.replace(/[%,]/g,' '); query=query.or('name.ilike.%'+esc+'%,code.ilike.%'+esc+'%,category.ilike.%'+esc+'%'); }
         const r=await query;
         if(r.error){ this.setState({itemMasterResults:null,itemMasterErr:true}); return; }
@@ -954,11 +956,11 @@ class Component extends DCLogic {
     if(!d.neededDate){ this.toastMsg('กรุณาระบุวันที่ต้องการใช้'); return; }
     const value=(d.items||[]).reduce((a,it)=>a+(it.total||0),0); const first=d.items.find(it=>it.d&&it.total>0)||d.items[0];
     const bc=this.sapBudget(d.budgetCode); const catName=bc?(bc.name||d.cat):d.cat;
-    if(d.editId){ const ex=this.brById(d.editId); if(ex){ this.persistBr(Object.assign({},ex,{requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',items:d.items.filter(it=>it.d),docs:d.docs||[],status:'รออนุมัติผู้บริหาร',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและยื่นใหม่',by:d.requester,at:this.now(),note:'แก้ไขรายละเอียดและส่งให้ผู้บริหารพิจารณาอีกครั้ง'}])})); }
+    if(d.editId){ const ex=this.brById(d.editId); if(ex){ this.persistBr(Object.assign({},ex,{bk06:d.bk06||ex.bk06||null,requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',items:d.items.filter(it=>it.d),docs:d.docs||[],status:'รออนุมัติผู้บริหาร',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและยื่นใหม่',by:d.requester,at:this.now(),note:'แก้ไขรายละเอียดและส่งให้ผู้บริหารพิจารณาอีกครั้ง'}])})); }
       this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:d.editId}); this.toastMsg('แก้ไขและยื่นคำขอใหม่แล้ว — '+d.editId); window.scrollTo&&window.scrollTo(0,0); return; }
     const id=await this.genDocId('BR');
-    const nb={kind:'br',id,at:this.now(),fy:this.fyNow(),requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
-    this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
+    const nb={kind:'br',id,at:this.now(),fy:this.fyNow(),bk06:d.bk06||null,requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
+    this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id,page:'br-create'}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
   // พัสดุรับเรื่อง (เลือกเงื่อนไข)
   prReceive(id,cond){ const p=(this.state.pr||[]).find(x=>x.id===id); if(!p)return; const note=((this.state.recvNotes||{})[id]||'').trim(); const detail=note?(cond+' — '+note):cond; this.persistPr(Object.assign({},p,{status:'พัสดุรับเรื่อง',condition:cond,log:(p.log||[]).concat([{s:'พัสดุรับเรื่อง',by:this.role().user.name,at:this.now(),note:detail}])})); this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[id]:''})})); this.toastMsg('รับเรื่องแล้ว · เงื่อนไข: '+cond); }
   // ตรวจสอบเอกสาร PO — กรอกเลข PO + อัปโหลด → ดึง SAP เดินไทม์ไลน์ต่อ
@@ -991,7 +993,7 @@ class Component extends DCLogic {
     const qq=q.trim().toLowerCase();
     let results=[];
     if(connected) results=live;
-    else results=((this.D.itemMaster)||[]).filter(x=>!qq||((x.name||'')+' '+(x.code||'')).toLowerCase().includes(qq)).slice(0,40);
+    else results=((this.D.itemMaster)||[]).filter(x=>!qq||((x.name||'')+' '+(x.code||'')).toLowerCase().includes(qq)).slice(0,200);
     const close=()=>this.closeItemLookup();
     return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.5)',zIndex:88,display:'flex',alignItems:R.isMobile?'flex-end':'center',justifyContent:'center',padding:R.isMobile?0:20,animation:'overlayIn .15s'}},
       h('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:R.isMobile?'18px 18px 0 0':16,width:R.isMobile?'100%':560,maxHeight:'92vh',overflowY:'auto',padding:'22px 22px 24px',boxShadow:'0 24px 60px rgba(10,25,22,.3)',animation:'sheetIn .22s'}},
@@ -1000,7 +1002,7 @@ class Component extends DCLogic {
           h('button',{onClick:close,style:{border:'1px solid '+this.LINE,background:'#fff',width:32,height:32,borderRadius:8,cursor:'pointer',fontSize:15,color:this.MUTE}},'✕')),
         h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:13,display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap'}},
           h('span',null,'ค้นจากรหัสหรือชื่อพัสดุ → ดูรายละเอียด → กด “เลือกรายการ”'),
-          connected? h('span',{style:{fontSize:10.5,color:this.GREEN,fontWeight:600}},'● เชื่อมฐานข้อมูล ('+results.length+')') : h('span',{style:{fontSize:10.5,color:this.AMBER,fontWeight:600}},'○ โหมดสำรอง (ข้อมูลตั้งต้น)')),
+          connected? h('span',{style:{fontSize:10.5,color:this.GREEN,fontWeight:600}},'● เชื่อมฐานข้อมูล · แสดง '+results.length+(results.length>=200?'+ รายการ (พิมพ์คำค้นเพื่อกรอง)':' รายการ')) : h('span',{style:{fontSize:10.5,color:this.AMBER,fontWeight:600}},'○ โหมดสำรอง (ข้อมูลตั้งต้น)')),
         h('input',{value:q,autoFocus:true,onChange:e=>{const v=e.target.value; this.setState({imQ:v,imSel:null}); this.searchItemMaster(v);},placeholder:'พิมพ์รหัสหรือชื่อพัสดุ เช่น เครื่องคอมพิวเตอร์ หรือ 8136…',
           style:{width:'100%',padding:'11px 13px',border:'1.5px solid '+this.LINE,borderRadius:10,fontSize:14,outline:'none',marginBottom:13,boxSizing:'border-box'}}),
         h('div',{style:{maxHeight:sel?200:330,overflowY:'auto',display:'flex',flexDirection:'column',gap:7,marginBottom:sel?14:0}},
@@ -1022,6 +1024,65 @@ class Component extends DCLogic {
             h('button',{onClick:()=>this.setState({imSel:null}),style:{flex:1,padding:'11px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13,color:this.INK,cursor:'pointer',fontWeight:500}},'เลือกรายการอื่น'),
             h('button',{onClick:()=>this.applyItemPick(),style:{flex:1.6,padding:'11px',border:'none',background:this.TEAL,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'✓ เลือกรายการนี้')))
         : null)); }
+  // ---------- แบบ บก.06 — ตารางแสดงวงเงินงบประมาณที่ได้รับจัดสรร ----------
+  brValid(d){
+    if(!(d.items||[]).some(it=>it.d&&it.total>0)) return 'กรุณากรอกรายการที่ขออนุมัติอย่างน้อย 1 รายการ';
+    if(!d.reason) return 'กรุณากรอกเหตุผล/ความจำเป็น';
+    if(!d.neededDate) return 'กรุณาระบุวันที่ต้องการใช้';
+    return null; }
+  gotoBk06(){ const d=this.state.brDraft; if(!d) return;
+    const err=this.brValid(d); if(err){ this.toastMsg(err); return; }
+    const items=(d.items||[]).filter(it=>it.d&&it.total>0);
+    const value=items.reduce((a,it)=>a+(it.total||0),0);
+    const projName=items.length>1? (items[0].d+' และอีก '+(items.length-1)+' รายการ') : (items[0]?items[0].d:'');
+    const unitPrice=items.length===1? Math.round((items[0].total||0)/(items[0].qty||1)) : 0;
+    const bk=Object.assign({ projName:projName, owner:(d.dn||'')+(d.dept?' ('+d.dept+')':''), value:value,
+      refDate:'', refAmount:value, refUnit:unitPrice, src1:'', src2:'', src3:'', off1:'', off2:'', off3:'' }, d.bk06||{});
+    this.setState({brDraft:Object.assign({},d,{bk06:bk}),page:'br-bk06'}); window.scrollTo&&window.scrollTo(0,0); }
+  updBk06(patch){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,{bk06:Object.assign({},s.brDraft.bk06,patch)})})); }
+  submitWithBk06(){ const d=this.state.brDraft; const bk=(d&&d.bk06)||{};
+    if(!bk.refDate){ this.toastMsg('กรุณาระบุวันที่กำหนดราคากลาง (ข้อ 4)'); return; }
+    if(!(bk.src1||'').trim()){ this.toastMsg('กรุณาระบุแหล่งที่มาของราคากลางอย่างน้อย 1 รายการ (ข้อ 5.1)'); return; }
+    if(!(bk.off1||'').trim()){ this.toastMsg('กรุณาระบุชื่อเจ้าหน้าที่ผู้กำหนดราคากลางอย่างน้อย 1 คน (ข้อ 6.1)'); return; }
+    this.askConfirm('ยืนยันส่งคำขออนุมัติจัดสรรงบ พร้อมแบบ บก.06 ให้ผู้บริหารพิจารณา?',()=>this.submitBr(),'ส่งคำขอ'); }
+  pgBk06(){ const h=React.createElement; const R=this.R; const d=this.state.brDraft;
+    if(!d){ return this.emptyBox? this.emptyBox('ไม่พบร่างคำขอ') : null; }
+    const bk=d.bk06||{};
+    const LINEC='#333';
+    const fill=(val,onCh,ph,w)=>h('input',{value:val||'',onChange:e=>onCh(e.target.value),placeholder:ph||'',
+      style:{flex:w?'none':1,width:w||'auto',minWidth:0,border:'none',borderBottom:'1px dotted '+LINEC,background:'transparent',fontSize:13.5,fontFamily:'inherit',padding:'2px 4px',outline:'none',color:'#111'}});
+    const ro=(val)=>h('span',{style:{flex:1,minWidth:0,borderBottom:'1px dotted '+LINEC,fontSize:13.5,padding:'2px 4px',color:'#111',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}},val||'\u2014');
+    const row=(children,indent)=>h('div',{style:{display:'flex',alignItems:'baseline',gap:6,marginBottom:11,paddingLeft:indent||0,flexWrap:'nowrap'}},children);
+    const lbl=t=>h('span',{style:{fontSize:13.5,whiteSpace:'nowrap'}},t);
+    return h('div',null,
+      h('div',{style:{display:'flex',gap:12,alignItems:'center',flexWrap:'wrap',marginBottom:16}},
+        h('button',{onClick:()=>this.setState({page:'br-create'}),style:{padding:'10px 18px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13,cursor:'pointer',color:this.INK,fontWeight:600}},'\u2190 กลับไปแก้คำขอ'),
+        h('div',{style:{fontSize:12.5,color:this.MUTE,lineHeight:1.6,flex:1,minWidth:220}},'ข้อ 1–3 ดึงจากคำขอให้อัโนมัติ · กรุณากรอกข้อ 4–6 ให้ครบก่อนส่งคำขอ')),
+      h('div',{style:{background:'#fff',border:'1px solid '+this.LINE,borderRadius:6,maxWidth:794,width:'100%',margin:'0 auto',padding:R.isMobile?'26px 20px':'48px 56px',boxShadow:'0 2px 14px rgba(10,35,30,.07)',color:'#111'}},
+        h('div',{style:{textAlign:'right',fontSize:13,fontWeight:700,marginBottom:14}},'แบบ บก.06'),
+        h('div',{style:{textAlign:'center',fontSize:15.5,fontWeight:700,lineHeight:1.6,marginBottom:22}},
+          'ตารางแสดงวงเงินงบประมาณที่ได้รับจัดสรรและรายละเอียดค่าใช้จ่าย',h('br'),
+          'การจัดซื้อจัดจ้างที่มิใช่งานก่อสร้าง'),
+        h('div',{style:{border:'1px solid '+LINEC,padding:R.isMobile?'18px 14px':'26px 26px 22px'}},
+          row([lbl('1. ชื่อโครงการ'),ro(bk.projName)]),
+          row([lbl('2. หน่วยงานเจ้าของโครงการ'),ro(bk.owner)]),
+          row([lbl('3. วงเงินงบประมาณที่ได้รับจัดสรร'),ro(this.fmtN(bk.value||0)),lbl('บาท')]),
+          row([lbl('4. วันที่กำหนดราคากลาง (ราคาอ้างอิง) ณ วันที่'),
+            h('input',{type:'date',value:bk.refDate||'',onChange:e=>this.updBk06({refDate:e.target.value}),style:{flex:1,minWidth:0,border:'none',borderBottom:'1px dotted '+LINEC,background:'transparent',fontSize:13.5,fontFamily:'inherit',padding:'2px 4px',outline:'none'}})]),
+          row([lbl('เป็นเงิน'),fill(bk.refAmount,v=>this.updBk06({refAmount:v.replace(/[^0-9.,]/g,'')}),'0.00'),lbl('บาท')],R.isMobile?12:34),
+          row([lbl('ราคา/หน่วย (ถ้ามี)'),fill(bk.refUnit,v=>this.updBk06({refUnit:v.replace(/[^0-9.,]/g,'')}),'0.00'),lbl('บาท')],R.isMobile?12:34),
+          h('div',{style:{fontSize:13.5,marginBottom:11,marginTop:16}},'5. แหล่งที่มาของราคากลาง (ราคาอ้างอิง)'),
+          row([lbl('5.1'),fill(bk.src1,v=>this.updBk06({src1:v}),'เช่น ใบเสนอราคาบริษัท…')],R.isMobile?12:34),
+          row([lbl('5.2'),fill(bk.src2,v=>this.updBk06({src2:v}))],R.isMobile?12:34),
+          row([lbl('5.3'),fill(bk.src3,v=>this.updBk06({src3:v}))],R.isMobile?12:34),
+          h('div',{style:{fontSize:13.5,marginBottom:11,marginTop:16}},'6. รายชื่อเจ้าหน้าที่ผู้กำหนดราคากลาง (ราคาอ้างอิง) ทุกคน'),
+          row([lbl('6.1'),fill(bk.off1,v=>this.updBk06({off1:v}),'ชื่อ-นามสกุล')],R.isMobile?12:34),
+          row([lbl('6.2'),fill(bk.off2,v=>this.updBk06({off2:v}))],R.isMobile?12:34),
+          row([lbl('6.3'),fill(bk.off3,v=>this.updBk06({off3:v}))],R.isMobile?12:34))),
+      h('div',{style:{display:'flex',justifyContent:'flex-end',gap:12,flexWrap:'wrap',marginTop:20,maxWidth:794,marginLeft:'auto',marginRight:'auto'}},
+        h('button',{onClick:()=>this.setState({page:'br-create'}),style:{fontSize:14,color:this.MUTE,padding:'12px 24px',borderRadius:11,border:'1px solid '+this.LINE,background:'#fff',cursor:'pointer'}},'กลับ'),
+        h('button',{onClick:()=>this.submitWithBk06(),style:{fontSize:14,fontWeight:600,color:'#fff',padding:'12px 30px',borderRadius:11,background:this.BLUE,border:'none',cursor:'pointer'}},'ส่งขออนุมัติจัดสรรงบ')));
+  }
   addPoDoc(){ this.pickFiles('ใบสั่งซื้อ (PO)',nd=>this.setState({poDocs:(this.state.poDocs||[]).concat(nd)})); }
   // ---------- เปลี่ยนกรรมการตรวจรับ (แนบเอกสารเพิ่มเติมได้) ----------
   openCmt(id){ const p=this.prById(id); if(!p) return;
@@ -1551,7 +1612,7 @@ class Component extends DCLogic {
             h('div',{style:{fontSize:12,color:okB?this.GREEN:this.RED,marginTop:10}},okB?'✓ งบเพียงพอสำหรับคำขอนี้ (ตัดจากเลขงบ '+d.budgetCode+')':'⚠ งบไม่เพียงพอ — เกินยอดคงเหลือของเลขงบนี้')); }).call(this))),
       h('div',{style:{display:'flex',justifyContent:'flex-end',gap:12,flexWrap:'wrap'}},
         h('button',{onClick:()=>this.setState({brDraft:this.newBrDraft(),brCreatedFlash:false}),style:{fontSize:14,color:this.MUTE,padding:'12px 24px',borderRadius:11,border:'1px solid '+this.LINE,background:'#fff',cursor:'pointer'}},'ล้างฟอร์ม'),
-        h('button',{onClick:()=>this.askConfirm('ยืนยันส่งคำขออนุมัติจัดสรรงบให้ผู้บริหารพิจารณา?',()=>this.submitBr(),'ส่งคำขอ'),style:{fontSize:14,fontWeight:600,color:'#fff',padding:'12px 30px',borderRadius:11,background:this.BLUE,border:'none',cursor:'pointer'}},'ส่งขออนุมัติจัดสรรงบ')));
+        h('button',{onClick:()=>this.gotoBk06(),style:{fontSize:14,fontWeight:600,color:'#fff',padding:'12px 30px',borderRadius:11,background:this.BLUE,border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:8}},'ขั้นตอนถัดไป',h('span',{style:{fontSize:16}},'\u2192'))));
   }
 
   reqControlBar(){ const h=React.createElement; const R=this.R; const views=[['list','▤','รายการ'],['grid','▦','กริด'],['table','☰','ตาราง']];
