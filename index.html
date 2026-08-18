@@ -379,7 +379,8 @@ class Component extends DCLogic {
       this.state.itemProModal? this.itemProSheet():null,
       this.state.docModal? this.docModal2():null,
       this.state.scanModal? this.scanSheet():null,
-      this.state.exportModal? this.exportSheet():null); }
+      this.state.exportModal? this.exportSheet():null,
+      this.state.cmtModal? this.cmtSheet():null); }
 
   brand(dark){ const h=React.createElement;
     return h('div',{style:{display:'flex',alignItems:'center',gap:11}},
@@ -640,8 +641,8 @@ class Component extends DCLogic {
   initDb(){ if(!this._sb && window.supabase){ try{ this._sb=window.supabase.createClient(this.SUPA_URL,this.SUPA_KEY); }catch(e){ this._sb=null; } } return this._sb; }
   brToDb(b){ return {id:b.id,at:b.at,fy:b.fy||this.fyOfThai(b.at)||this.fyNow(),requester:b.requester,email:b.email||b.requester,owner_email:this._authEmail||b.email||null,dept:b.dept,dn:b.dn,tel:b.tel,pos:b.pos,item_name:b.itemName,reason:b.reason,qty:b.qty,unit:b.unit,value:b.value,needed_date:b.neededDate,cat:b.cat,proc_type:b.procType,med:!!b.med,has_code:!!b.hasCode,code:b.code||'',status:b.status,budget_type:b.budgetType,budget_name:b.budgetName,pr_id:b.prId||'',log:b.log||[]}; }
   brFromDb(r){ return {kind:'br',id:r.id,at:r.at,fy:r.fy?Number(r.fy):null,requester:r.requester,email:r.email,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,itemName:r.item_name,reason:r.reason,qty:Number(r.qty),unit:r.unit,value:Number(r.value),neededDate:r.needed_date,cat:r.cat,procType:r.proc_type,med:r.med,hasCode:r.has_code,code:r.code,status:r.status,budgetType:r.budget_type,budgetName:r.budget_name,prId:r.pr_id,log:r.log||[]}; }
-  prToDb(p){ return {id:p.id,br_id:p.brId,fy:p.fy||this.fyOfThai(p.at)||this.fyNow(),requester:p.requester,owner_email:this._authEmail||null,dept:p.dept,dn:p.dn,tel:p.tel,pos:p.pos,items:p.items,sub:p.sub,vat:p.vat,total:p.total,cat:p.cat,exp:p.exp,proc_type:p.procType,urgency:p.urgency,reason:p.reason,committee:p.committee,condition:p.condition||'',po:p.po||'',vendor:p.vendor||'',docs:p.docs||[],status:p.status,at:p.at,needed_date:p.neededDate,log:p.log||[]}; }
-  prFromDb(r){ return {kind:'pr',id:r.id,brId:r.br_id,fy:r.fy?Number(r.fy):null,requester:r.requester,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,items:r.items||[],sub:Number(r.sub),vat:Number(r.vat),total:Number(r.total),cat:r.cat,exp:r.exp,procType:r.proc_type,urgency:r.urgency,reason:r.reason,committee:r.committee||[],condition:r.condition,po:r.po,vendor:r.vendor,docs:r.docs||[],status:r.status,at:r.at,neededDate:r.needed_date,budgetCode:r.budget_code||'',log:r.log||[]}; }
+  prToDb(p){ return {id:p.id,br_id:p.brId,fy:p.fy||this.fyOfThai(p.at)||this.fyNow(),requester:p.requester,owner_email:this._authEmail||null,dept:p.dept,dn:p.dn,tel:p.tel,pos:p.pos,items:p.items,sub:p.sub,vat:p.vat,total:p.total,cat:p.cat,exp:p.exp,proc_type:p.procType,urgency:p.urgency,reason:p.reason,committee:p.committee,condition:p.condition||'',po:p.po||'',vendor:p.vendor||'',docs:p.docs||[],status:p.status,at:p.at,needed_date:p.neededDate,cmt_history:p.cmtHistory||[],log:p.log||[]}; }
+  prFromDb(r){ return {kind:'pr',id:r.id,brId:r.br_id,fy:r.fy?Number(r.fy):null,requester:r.requester,dept:r.dept,dn:r.dn,tel:r.tel,pos:r.pos,items:r.items||[],sub:Number(r.sub),vat:Number(r.vat),total:Number(r.total),cat:r.cat,exp:r.exp,procType:r.proc_type,urgency:r.urgency,reason:r.reason,committee:r.committee||[],condition:r.condition,po:r.po,vendor:r.vendor,docs:r.docs||[],status:r.status,at:r.at,neededDate:r.needed_date,budgetCode:r.budget_code||'',cmtHistory:r.cmt_history||[],log:r.log||[]}; }
   async loadDb(){
     const sb=this.initDb();
     const fallback=()=>{ this.setState({br:[], pr:[], loaded:true, online:false, users:this.defaultUsers()}); };
@@ -878,7 +879,7 @@ class Component extends DCLogic {
     const committee=(draft.committee||[]).filter(c=>c&&c.trim());
     const pr={kind:'pr',id,fy:this.fyNow(),brId:draft.brId,requester:draft.requester,dept:draft.dept,dn:draft.dn,tel:draft.tel,pos:draft.pos,
       items:draft.items,sub,vat,total:sub+vat,vatMode:draft.vatMode||'excl',cat:draft.cat,exp:draft.exp,procType:draft.procType==='อื่นๆ'?(draft.procTypeOther||'อื่นๆ'):draft.procType,urgency:draft.urgency,reason:draft.reason,
-      committee,condition:'',po:'',vendor:'',docs:[],status:'ยื่นเสนอซื้อ',at:this.D.meta.today,neededDate:draft.neededDate,budgetCode:draft.budgetCode||'',gd:0,ap:0,paid:0,grl:[],ver:1,
+      committee,condition:'',po:'',vendor:'',docs:(draft.docs||[]),status:'ยื่นเสนอซื้อ',at:this.D.meta.today,neededDate:draft.neededDate,budgetCode:draft.budgetCode||'',gd:0,ap:0,paid:0,grl:[],ver:1,
       log:[{s:draft.brId?('Copy to PR — สร้างใบขอซื้อจาก '+draft.brId):'สร้างใบขอซื้อ (เริ่มกระบวนการที่ PR)',by:draft.requester,at:this.now()}]};
     this.insertPr(pr); if(draft.brId){ const b=this.brById(draft.brId); if(b) this.persistBr(Object.assign({},b,{prId:id})); }
     this.setState({prDraft:null,page:'my-requests',sel:id,selType:'pr'}); this.toastMsg('สร้างใบขอซื้อ '+id+' และส่งงานพัสดุแล้ว'); }
@@ -891,7 +892,61 @@ class Component extends DCLogic {
   updBrItem(i,patch){ this.setState(s=>{ const items=(s.brDraft.items||[]).slice(); items[i]=Object.assign({},items[i],patch); if('qty' in patch||'price' in patch) items[i].total=(+items[i].qty||0)*(+items[i].price||0); return {brDraft:Object.assign({},s.brDraft,{items})}; }); }
   addBrItem(){ this.setState(s=>({brDraft:Object.assign({},s.brDraft,{items:(s.brDraft.items||[]).concat([{d:'',c:'',u:'',qty:1,price:0,total:0}])})})); }
   delBrItem(i){ this.setState(s=>{ const items=(s.brDraft.items||[]).slice(); items.splice(i,1); if(!items.length)items.push({d:'',c:'',u:'',qty:1,price:0,total:0}); return {brDraft:Object.assign({},s.brDraft,{items})}; }); }
-  addBrDoc(){ const names=['ใบเสนอราคา.pdf','สเปคพัสดุ.pdf','ใบเปรียบเทียบราคา.pdf','หนังสือขออนุมัติ.pdf']; const cur=(this.state.brDraft.docs||[]); this.updBr({docs:cur.concat([names[cur.length%names.length]])}); }
+  // ---------- ไฟล์แนบ / ลิงก์แนบ (ของจริง) ----------
+  DOC_KINDS=['ใบเสนอราคา','เอกสาร TOR / คุณลักษณะเฉพาะ','ใบเปรียบเทียบราคา','หนังสือแต่งตั้งกรรมการ','อื่นๆ'];
+  BUCKET='attachments';
+  docName(dc){ return typeof dc==='string'? dc : ((dc&&dc.name)||'ไฟล์แนบ'); }
+  docUrl(dc){ return (dc&&typeof dc==='object'&&dc.url)||''; }
+  docKind(dc){ return (dc&&typeof dc==='object'&&dc.kind)||''; }
+  docIsLink(dc){ return !!(dc&&typeof dc==='object'&&dc.type==='link'); }
+  openDoc(dc){ const u=this.docUrl(dc); if(u) window.open(u,'_blank','noreferrer');
+    else this.toastMsg('รายการนี้เป็นชื่อไฟล์เดิม (ไม่มีไฟล์จริง) — กรุนาแนบไฟล์ใหม่'); }
+  // เลือกไฟล์จากเครื่อง → อัปโหลดขึ้น Supabase Storage → คืน [{name,url,kind,type,size}]
+  pickFiles(kind,cb){ const inp=document.createElement('input'); inp.type='file'; inp.multiple=true;
+    inp.accept='.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip';
+    inp.onchange=async ()=>{ const files=Array.from(inp.files||[]); if(!files.length) return;
+      const sb=this.initDb(); const out=[]; let failed=0;
+      this.toastMsg('กำลังอัปโหลด '+files.length+' ไฟล์…');
+      for(const f of files){
+        if(f.size>25*1024*1024){ this.toastMsg('⚠ '+f.name+' มีขนาดเกิน 25 MB — ข้ามไฟล์นี้'); failed++; continue; }
+        let url='';
+        if(sb&&this.state.online){
+          const safe=f.name.replace(/[^\w.\-\u0e00-\u0e7f]/g,'_');
+          const path=(this.curFy()||'')+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'-'+safe;
+          try{ const up=await sb.storage.from(this.BUCKET).upload(path,f,{cacheControl:'3600',upsert:false});
+            if(up&&up.error) throw up.error;
+            const pub=sb.storage.from(this.BUCKET).getPublicUrl(path); url=(pub&&pub.data&&pub.data.publicUrl)||'';
+          }catch(e){ console.warn('upload',e); failed++;
+            this.toastMsg('⚠ อัปโหลด '+f.name+' ไม่สำเร็จ: '+((e&&e.message)||'')+' — ตรวจสอบว่ามี bucket "'+this.BUCKET+'" ใน Supabase Storage แล้วหรือไม่'); continue; }
+        } else { this.toastMsg('⚠ ไม่ได้เชื่อมต่อฐานข้อมูล — ไม่สามารถอัปโหลดไฟล์ได้'); return; }
+        out.push({name:f.name,url:url,kind:kind||'',type:'file',size:f.size});
+      }
+      if(out.length){ cb(out); this.toastMsg('✓ แนบไฟล์แล้ว '+out.length+' ไฟล์'+(failed?' ('+failed+' ไฟล์ไม่สำเร็จ)':'')); }
+    };
+    inp.click(); }
+  // แนบลิงก์ (Google Drive / SharePoint / เว็บอื่น)
+  pickLink(kind,cb){ const url=(window.prompt('วางลิงก์เอกสาร ('+(kind||'เอกสาร')+')\nเช่น Google Drive, SharePoint หรือ URL เว็บไซต์ผู้ขาย','https://')||'').trim();
+    if(!url||url==='https://') return;
+    if(!/^https?:\/\//i.test(url)){ this.toastMsg('⚠ ลิงก์ต้องเริ่มด้วย http:// หรือ https://'); return; }
+    let name=(window.prompt('ชื่อที่แสดง (เว้นว่างจะใช้ชื่อหมวดเอกสาร)',kind||'')||'').trim();
+    if(!name){ try{ name=kind||new URL(url).hostname; }catch(e){ name=kind||'ลิงก์เอกสาร'; } }
+    cb([{name:name,url:url,kind:kind||'',type:'link'}]); this.toastMsg('✓ แนบลิงก์แล้ว'); }
+  // แถบแนบเอกสารแบบใช้ซ้ำ — docs:อาร์เรย์ปัจจุบัน, set:ฟังก์ชันบันทึกค่าใหม่
+  attachBar(docs,set,opts){ const h=React.createElement; const o=opts||{}; const list=docs||[];
+    const kinds=o.kinds||this.DOC_KINDS; const sel=this.state.attachKind||kinds[0];
+    return h('div',{style:{display:'flex',flexDirection:'column',gap:9}},
+      list.length? h('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+        list.map((dc,i)=>{ const isLink=this.docIsLink(dc); const kd=this.docKind(dc); const has=!!this.docUrl(dc);
+          return h('span',{key:i,style:{fontSize:11.5,background:isLink?this.PURBG:this.BLUEBG,color:isLink?'#5342a0':'#215c96',borderRadius:8,padding:'6px 10px',display:'inline-flex',gap:6,alignItems:'center',maxWidth:'100%'}},
+            h('span',{onClick:()=>this.openDoc(dc),title:has?(isLink?'เปิดลิงก์':'เปิดไฟล์'):'',style:{cursor:has?'pointer':'default',textDecoration:has?'underline':'none',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:220}},(isLink?'🔗 ':'📎 ')+this.docName(dc)),
+            kd? h('span',{style:{fontSize:10,opacity:.75,whiteSpace:'nowrap'}},'· '+kd):null,
+            h('span',{onClick:()=>set(list.filter((_,j)=>j!==i)),style:{cursor:'pointer',color:this.RED,fontWeight:700}},'✕')); })):null,
+      h('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},
+        h('select',{value:sel,onChange:e=>this.setState({attachKind:e.target.value}),style:{fontSize:11.5,border:'1px solid '+this.LINE,borderRadius:8,padding:'6px 8px',background:'#fff',cursor:'pointer',maxWidth:200}},
+          kinds.map(k=>h('option',{key:k,value:k},k))),
+        h('span',{onClick:()=>this.pickFiles(sel,nd=>set(list.concat(nd))),style:{fontSize:11.5,border:'1px dashed '+this.TEAL,color:this.TEAL,fontWeight:600,borderRadius:8,padding:'6px 11px',cursor:'pointer',whiteSpace:'nowrap'}},'⬆ แนบไฟล์'),
+        h('span',{onClick:()=>this.pickLink(sel,nd=>set(list.concat(nd))),style:{fontSize:11.5,border:'1px dashed '+this.LINE,color:this.MUTE,borderRadius:8,padding:'6px 11px',cursor:'pointer',whiteSpace:'nowrap'}},'🔗 แนบลิงก์')));
+  }
   async submitBr(){ const d=this.state.brDraft; if(!d) return;
     if(!(d.items||[]).some(it=>it.d&&it.total>0)){ this.toastMsg('กรุณากรอกรายการที่ขออนุมัติอย่างน้อย 1 รายการ'); return; }
     if(!d.reason){ this.toastMsg('กรุณากรอกเหตุผล/ความจำเป็น'); return; }
@@ -922,7 +977,49 @@ class Component extends DCLogic {
     this.persistPr(Object.assign({},p,{po:poNo,status:'ออกใบสั่งซื้อ',docs,vendor:rec?rec.vn:p.vendor,log}));
     this.setState({poBindModal:null,poBindInput:'',poDocs:[]});
     this.toastMsg(rec? 'บันทึกเลข PO '+poNo+' — ดึงข้อมูล SAP เดินไทม์ไลน์ต่ออัตโนมัติ' : 'บันทึกเลข PO '+poNo+' แล้ว'); }
-  addPoDoc(){ const names=['ใบสั่งซื้อ_PO.pdf','ใบเสนอราคา.pdf','ใบส่งของ_GR.pdf','สัญญาซื้อขาย.pdf','ใบกำกับภาษี.pdf']; const cur=this.state.poDocs||[]; const n=names[cur.length%names.length]; this.setState({poDocs:cur.concat([n])}); }
+  addPoDoc(){ this.pickFiles('ใบสั่งซื้อ (PO)',nd=>this.setState({poDocs:(this.state.poDocs||[]).concat(nd)})); }
+  // ---------- เปลี่ยนกรรมการตรวจรับ (แนบเอกสารเพิ่มเติมได้) ----------
+  openCmt(id){ const p=this.prById(id); if(!p) return;
+    this.setState({cmtModal:id,cmtList:((p.committee||[]).length?p.committee.slice():['']),cmtDocs:[],cmtReason:'',sel:null}); }
+  updCmt(i,v){ this.setState(s=>{ const c=(s.cmtList||['']).slice(); c[i]=v; return {cmtList:c}; }); }
+  addCmtRow(){ this.setState(s=>({cmtList:(s.cmtList||['']).concat([''])})); }
+  delCmtRow(i){ this.setState(s=>{ const c=(s.cmtList||['']).slice(); c.splice(i,1); if(!c.length)c.push(''); return {cmtList:c}; }); }
+  saveCmt(){ const id=this.state.cmtModal; const p=this.prById(id); if(!p) return;
+    const nc=(this.state.cmtList||[]).map(x=>(x||'').trim()).filter(Boolean);
+    if(!nc.length){ this.toastMsg('กรุณาระบุกรรมการอย่างน้อย 1 คน'); return; }
+    if((p.total||0)>100000 && nc.length<3){ this.toastMsg('วงเงินเกิน 100,000 บาท — ต้องมีกรรมการอย่างน้อย 3 คน'); return; }
+    const old=(p.committee||[]).join(', ')||'—'; const docs=(p.docs||[]).concat(this.state.cmtDocs||[]);
+    const hist=(p.cmtHistory||[]).concat([{at:this.now(),by:this._authName||this.role().user.name,from:p.committee||[],to:nc,reason:this.state.cmtReason||'',docs:this.state.cmtDocs||[]}]);
+    this.persistPr(Object.assign({},p,{committee:nc,docs,cmtHistory:hist,
+      log:(p.log||[]).concat([{s:'เปลี่ยนกรรมการตรวจรับ',by:this._authName||this.role().user.name,at:this.now(),
+        note:'จาก '+old+' → '+nc.join(', ')+(this.state.cmtReason?' · เหตุผล: '+this.state.cmtReason:'')+((this.state.cmtDocs||[]).length?' · แนบเอกสาร '+this.state.cmtDocs.length+' รายการ':'')}])}));
+    this.logEvent('เปลี่ยนกรรมการตรวจรับ',id,nc.join(', '));
+    this.setState({cmtModal:null,cmtList:null,cmtDocs:[],cmtReason:''});
+    this.toastMsg('✓ บันทึกกรรมการตรวจรับชุดใหม่แล้ว'); }
+  cmtSheet(){ const h=React.createElement; const R=this.R; const p=this.prById(this.state.cmtModal); if(!p) return null;
+    const close=()=>this.setState({cmtModal:null,cmtList:null,cmtDocs:[],cmtReason:''});
+    const list=this.state.cmtList||[''];
+    return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.5)',zIndex:86,display:'flex',alignItems:R.isMobile?'flex-end':'center',justifyContent:'center',padding:R.isMobile?0:20,animation:'overlayIn .15s'}},
+      h('div',{onClick:e=>e.stopPropagation(),style:{background:'#fff',borderRadius:R.isMobile?'18px 18px 0 0':16,width:R.isMobile?'100%':520,maxHeight:'92vh',overflowY:'auto',padding:'22px 22px 24px',boxShadow:'0 24px 60px rgba(10,25,22,.3)',animation:'sheetIn .22s'}},
+        h('div',{style:{fontSize:17,fontWeight:700,marginBottom:5}},'เปลี่ยนกรรมการตรวจรับ'),
+        h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:16,lineHeight:1.55}},'ใบขอซื้อ ',h('b',{style:{color:this.INK,fontFamily:"'IBM Plex Mono',monospace"}},p.id),' — แก้รายชื่อกรรมการ แล้วแนบหนังสือแต่งตั้งกรรมการชุดใหม่เป็นหลักฐาน'),
+        h('div',{style:{display:'flex',flexDirection:'column',gap:9,marginBottom:14}},
+          list.map((cm,i)=>h('div',{key:i,style:{display:'flex',gap:8,alignItems:'center'}},
+            h('span',{style:{fontSize:11.5,color:this.MUTE,minWidth:118}},i===0?'ประธานกรรมการ':(i===list.length-1&&list.length>1?'กรรมการและเลขานุการ':'กรรมการ')),
+            h('input',{value:cm,onChange:e=>this.updCmt(i,e.target.value),placeholder:'ชื่อ-นามสกุล',style:{flex:1,padding:'10px 12px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:13.5,outline:'none'}}),
+            list.length>1? h('span',{onClick:()=>this.delCmtRow(i),style:{color:this.RED,cursor:'pointer',fontSize:14,padding:'0 4px'}},'✕'):null)),
+          h('span',{onClick:()=>this.addCmtRow(),style:{alignSelf:'flex-start',fontSize:12.5,color:this.TEAL,fontWeight:600,border:'1px dashed '+this.TEAL,padding:'8px 14px',borderRadius:9,cursor:'pointer'}},'＋ เพิ่มกรรมการ')),
+        h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:6}},'เหตุผลการเปลี่ยนแปลง'),
+        h('input',{value:this.state.cmtReason||'',onChange:e=>this.setState({cmtReason:e.target.value}),placeholder:'เช่น กรรมการเดิมลาราชการ / โยกย้ายหน่วยงาน',style:{width:'100%',padding:'10px 12px',border:'1px solid '+this.LINE,borderRadius:9,fontSize:13.5,outline:'none',marginBottom:14,boxSizing:'border-box'}}),
+        h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:7}},'แนบเอกสารเพิ่มเติม (หนังสือแต่งตั้งกรรมการ / คำสั่ง)'),
+        this.attachBar(this.state.cmtDocs||[],nd=>this.setState({cmtDocs:nd}),{kinds:['หนังสือแต่งตั้งกรรมการ','คำสั่งมอบหมาย','หนังสือขอเปลี่ยนกรรมการ','อื่นๆ']}),
+        (p.cmtHistory||[]).length? h('div',{style:{marginTop:16,padding:'12px 14px',background:this.PANEL,borderRadius:10}},
+          h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,marginBottom:7}},'ประวัติการเปลี่ยนกรรมการ'),
+          (p.cmtHistory||[]).slice().reverse().map((x,i)=>h('div',{key:i,style:{fontSize:11.5,color:this.INK,lineHeight:1.6,marginBottom:5}},
+            h('span',{style:{color:this.MUTE,fontFamily:"'IBM Plex Mono',monospace"}},x.at+' '),h('span',null,(x.from||[]).join(', ')||'—'),' → ',h('b',null,(x.to||[]).join(', ')),x.reason?h('span',{style:{color:this.MUTE}},' · '+x.reason):null))):null,
+        h('div',{style:{display:'flex',gap:10,marginTop:18}},
+          h('button',{onClick:close,style:{flex:1,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer',fontWeight:500}},'ยกเลิก'),
+          h('button',{onClick:()=>this.saveCmt(),style:{flex:1.4,padding:'12px',border:'none',background:this.TEAL,color:'#fff',borderRadius:10,fontSize:13.5,cursor:'pointer',fontWeight:600}},'บันทึกการเปลี่ยนแปลง')))); }
 
   // ================= CHART HELPERS =================
   kpiGrid(items,cols){ const h=React.createElement; const R=this.R; const c=R.isMobile?2:R.isTablet?3:cols;
@@ -1387,10 +1484,10 @@ class Component extends DCLogic {
               rows)),
           h('div',{style:{display:'flex',justifyContent:'space-between',marginTop:14,flexWrap:'wrap',gap:12}},
             h('span',{style:{fontSize:12,color:this.MUTE}},'* ขออนุมัติได้ 1 รายการต่อ 1 ใบ'),
-            h('div',{style:{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}},
-              h('div',{style:{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}},h('span',{style:{fontSize:12.5,color:this.MUTE}},'ไฟล์แนบ:'),
-                (d.docs||[]).map((dc,i)=>h('span',{key:i,style:{fontSize:11.5,background:this.BLUEBG,color:'#215c96',borderRadius:8,padding:'6px 10px',display:'inline-flex',gap:5,alignItems:'center'}},'📎 '+dc,h('span',{onClick:()=>this.updBr({docs:d.docs.filter((_,j)=>j!==i)}),style:{cursor:'pointer',color:this.RED}},'✕'))),
-                h('span',{onClick:()=>this.addBrDoc(),style:{fontSize:11.5,border:'1px dashed '+this.LINE,borderRadius:8,padding:'6px 10px',cursor:'pointer',color:this.MUTE}},'⬆ แนบไฟล์')),
+            h('div',{style:{display:'flex',alignItems:'flex-start',gap:14,flexWrap:'wrap',justifyContent:'space-between'}},
+              h('div',{style:{flex:1,minWidth:260}},
+                h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:7}},'เอกสารแนบ (ใบเสนอราคา / TOR / คุณลักษณะเฉพาะ — แนบไฟล์หรือวางลิงก์ก็ได้)'),
+                this.attachBar(d.docs,nd=>this.updBr({docs:nd}))),
               h('div',{style:{fontSize:15,fontWeight:700}},'รวม ',h('span',{style:{color:this.BLUE,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(value))))))),
       sec('03','ตรวจสอบงบประมาณคงเหลือ (ตัดจากเลขที่งบประมาณ SAP)',
         h('div',null,
@@ -1662,8 +1759,7 @@ class Component extends DCLogic {
             h('input',{value:this.state.trackQ,onChange:e=>this.setState({trackQ:e.target.value,trackResult:null}),placeholder:'\u0e40\u0e0a\u0e48\u0e19 BR-256907-0001 \u0e2b\u0e23\u0e37\u0e2d PR-2569...',style:{width:'100%',padding:'12px 12px 12px 34px',border:'1px solid '+this.LINE,borderRadius:10,fontSize:13.5,fontFamily:"'IBM Plex Mono',monospace",outline:'none'}}),
             h('span',{style:{position:'absolute',left:12,top:12,color:this.MUTE,fontSize:15}},'\u2315')),
           h('button',{onClick:()=>{ if(matches[0]) this.setState({trackResult:matches[0].id,trackQ:matches[0].id}); else this.toastMsg('ไม่พบเอกสารที่ตรงกับคำค้น'); },style:{padding:'12px 20px',border:'none',background:this.TEAL,color:'#fff',borderRadius:10,fontSize:13,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:7}},h('span',{style:{fontSize:15}},'⌕'),'ค้นหา'),
-          h('button',{onClick:()=>this.setState({scanModal:true}),style:{padding:'12px 18px',border:'1px solid '+this.TEAL,background:'#fff',color:this.TEAL,borderRadius:10,fontSize:13,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:7}},h('span',{style:{fontSize:15}},'◦'),'สแกน QR'),
-          h('button',{onClick:()=>window.open('https://ommelody.github.io/PO-Tracking-Dashboard/','_blank'),style:{padding:'12px 16px',border:'1px solid '+this.LINE,background:'#fff',color:this.INK,borderRadius:10,fontSize:13,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:6}},'ดูทั้งหมด ↗')),
+          h('button',{onClick:()=>this.setState({scanModal:true}),style:{padding:'12px 18px',border:'1px solid '+this.TEAL,background:'#fff',color:this.TEAL,borderRadius:10,fontSize:13,cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:7}},h('span',{style:{fontSize:15}},'◦'),'สแกน QR')),
         matches.length? h('div',{style:{marginTop:12,display:'flex',flexDirection:'column',gap:6}},
           matches.map(r=>h('div',{key:r.id,onClick:()=>this.setState({trackResult:r.id,trackQ:r.id}),style:{cursor:'pointer',display:'flex',alignItems:'center',gap:10,padding:'9px 12px',border:'1px solid '+this.LINE,borderRadius:9}},
             h('span',{style:{fontSize:9.5,fontWeight:700,color:'#fff',background:r.kind==='br'?this.BLUE:this.GREEN,padding:'2px 6px',borderRadius:5}},r.kind==='br'?'BR':'PR'),
@@ -1964,7 +2060,7 @@ class Component extends DCLogic {
         h('div',{style:{display:'flex',justifyContent:'space-between',padding:'12px 13px',borderTop:'1px solid '+this.LINE,background:this.PANEL}},h('span',{style:{fontWeight:600}},br?'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e07\u0e32\u0e19':'\u0e22\u0e2d\u0e14\u0e23\u0e27\u0e21\u0e2a\u0e38\u0e17\u0e18\u0e34 (\u0e23\u0e27\u0e21 VAT)'),h('span',{style:{fontWeight:700,fontFamily:"'IBM Plex Mono',monospace",color:this.TEAL}},this.baht(br?rec.value:rec.total)))),
       docs.length? h('div',{style:{marginTop:16}},
         h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,textTransform:'uppercase',letterSpacing:.5,marginBottom:10}},'\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e41\u0e19\u0e1a (\u0e08\u0e32\u0e01\u0e01\u0e32\u0e23\u0e2d\u0e31\u0e1b\u0e42\u0e2b\u0e25\u0e14/SAP)'),
-        h('div',{style:{display:'flex',flexWrap:'wrap',gap:8}}, docs.map((d,i)=>h('span',{key:i,style:{display:'flex',alignItems:'center',gap:7,padding:'7px 12px',borderRadius:9,background:this.BLUEBG,fontSize:12,color:'#215c96'}},h('span',null,'\uD83D\uDCCE'),d)))):null);
+        h('div',{style:{display:'flex',flexWrap:'wrap',gap:8}}, docs.map((d,i)=>{ const isLink=this.docIsLink(d); const has=!!this.docUrl(d); return h('span',{key:i,onClick:()=>this.openDoc(d),title:has?'เปิดเอกสาร':'',style:{display:'flex',alignItems:'center',gap:7,padding:'7px 12px',borderRadius:9,background:isLink?this.PURBG:this.BLUEBG,fontSize:12,color:isLink?'#5342a0':'#215c96',cursor:has?'pointer':'default',textDecoration:has?'underline':'none'}},h('span',null,isLink?'\uD83D\uDD17':'\uD83D\uDCCE'),this.docName(d),this.docKind(d)?h('span',{style:{fontSize:10,opacity:.7}},'· '+this.docKind(d)):null); }))):null);
     const btns=[];
     btns.push(h('button',{key:'doc',onClick:()=>this.setState({docModal:rec.id,docType:rec.kind}),style:{padding:'10px 16px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',color:this.INK}},'\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23 '+(rec.kind==='br'?'BR':'PR')));
     if(!br && rec.brId && this.brById(rec.brId)){
@@ -1985,6 +2081,9 @@ class Component extends DCLogic {
     }
     if(!br && (this.state.role==='requester'||this.state.role==='admin') && rec.status==='ส่งกลับแก้ไข (PR)'){
       btns.push(h('button',{key:'prrs',onClick:()=>this.prResubmit(rec.id),style:{padding:'10px 20px',border:'none',background:this.AMBER,color:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',fontWeight:600}},'แก้ไขและส่งใหม่'));
+    }
+    if(!br && (this.state.role==='procurement'||this.state.role==='admin'||this.state.role==='requester')){
+      btns.push(h('button',{key:'cmt',onClick:()=>this.openCmt(rec.id),style:{padding:'10px 16px',border:'1px solid '+this.PUR,background:this.PURBG,borderRadius:9,fontSize:13,color:this.PUR,cursor:'pointer',fontWeight:600}},'เปลี่ยนกรรมการตรวจรับ'));
     }
     if(!br && (this.state.role==='procurement'||this.state.role==='admin')){
       btns.push(h('button',{key:'x2s',onClick:()=>this.downloadSapExcel([rec]),style:{padding:'10px 18px',border:'1px solid #0a6b3c',background:'#eaf5ee',borderRadius:9,fontSize:13,color:'#0a6b3c',cursor:'pointer',fontWeight:600}},'\u2b07 Excel \u2192 SAP'));
@@ -2195,7 +2294,10 @@ class Component extends DCLogic {
           h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr':'1fr 1fr 1fr',gap:14}},
             (d.committee&&d.committee.length?d.committee:['']).map((cm,i,arr)=>{ const roleT=i===0?'ประธานกรรมการ':(i===arr.length-1&&arr.length>1?'กรรมการและเลขานุการ':'กรรมการ');
               return box(h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:5,display:'flex',justifyContent:'space-between',alignItems:'center'}},h('span',null,roleT,i===0?h('span',{style:{color:this.RED}},' *'):null), arr.length>1?h('span',{onClick:()=>this.delCommittee(i),style:{color:this.RED,cursor:'pointer',fontSize:13}},'✕'):null), inp(cm,v=>this.updCommittee(i,v),'ชื่อ-นามสกุล'),false); })),
-          h('span',{onClick:()=>this.addCommittee(),style:{display:'inline-block',marginTop:12,fontSize:12.5,color:this.TEAL,fontWeight:600,border:'1px dashed '+this.TEAL,padding:'8px 14px',borderRadius:9,cursor:'pointer'}},'＋ เพิ่มกรรมการ'))),
+          h('span',{onClick:()=>this.addCommittee(),style:{display:'inline-block',marginTop:12,fontSize:12.5,color:this.TEAL,fontWeight:600,border:'1px dashed '+this.TEAL,padding:'8px 14px',borderRadius:9,cursor:'pointer'}},'＋ เพิ่มกรรมการ'),
+          h('div',{style:{marginTop:18,paddingTop:16,borderTop:'1px solid '+this.LINE}},
+            h('div',{style:{fontSize:12.5,color:this.MUTE,marginBottom:8}},'เอกสารแนบ (ใบเสนอราคา / TOR / คุณลักษณะเฉพาะ — แนบไฟล์หรือวางลิงก์ก็ได้)'),
+            this.attachBar(d.docs,nd=>this.updDraft({docs:nd}))))),
       h('div',{style:{display:'flex',justifyContent:'flex-end',gap:12,flexWrap:'wrap'}},
         h('button',{onClick:()=>this.go('my-requests'),style:{fontSize:14,color:this.MUTE,padding:'12px 24px',borderRadius:11,border:'1px solid '+this.LINE,background:'#fff',cursor:'pointer'}},'ยกเลิก'),
         h('button',{onClick:()=>this.trySubmitPr(),style:{fontSize:14,fontWeight:600,color:'#fff',padding:'12px 30px',borderRadius:11,background:this.TEAL,border:'none',cursor:'pointer',boxShadow:'0 2px 8px rgba(13,110,99,.3)'}},'ส่งใบขอซื้อ')));
@@ -2797,7 +2899,6 @@ class Component extends DCLogic {
           : (val.trim()? h('div',{style:{background:this.AMBERBG,borderRadius:11,padding:'12px 15px',marginBottom:14,fontSize:12,color:this.AMBER,display:'flex',gap:8,alignItems:'center'}},h('span',null,'\u26a0'),'\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e40\u0e25\u0e02\u0e19\u0e35\u0e49\u0e43\u0e19\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25 SAP \u0e17\u0e35\u0e48\u0e0b\u0e34\u0e07\u0e04\u0e4c \u2014 \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e44\u0e14\u0e49 \u0e41\u0e15\u0e48\u0e44\u0e17\u0e21\u0e4c\u0e44\u0e25\u0e19\u0e4c\u0e08\u0e30\u0e2b\u0e22\u0e38\u0e14\u0e17\u0e35\u0e48 "\u0e2d\u0e2d\u0e01 PO"'):null),
         h('div',{style:{fontSize:12,color:this.MUTE,marginBottom:8}},'\u0e41\u0e19\u0e1a\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e1b\u0e23\u0e30\u0e01\u0e2d\u0e1a (\u0e43\u0e1a\u0e2a\u0e31\u0e48\u0e07\u0e0b\u0e37\u0e49\u0e2d/\u0e43\u0e1a\u0e40\u0e2a\u0e19\u0e2d\u0e23\u0e32\u0e04\u0e32/\u0e43\u0e1a\u0e2a\u0e48\u0e07\u0e02\u0e2d\u0e07)'),
         h('div',{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:6}},
-          docs.map((d,i)=>h('span',{key:i,style:{display:'flex',alignItems:'center',gap:6,padding:'6px 11px',borderRadius:8,background:this.BLUEBG,fontSize:11.5,color:'#215c96'}},h('span',null,'\uD83D\uDCCE'),d)),
           h('button',{onClick:()=>this.addPoDoc(),style:{padding:'6px 12px',border:'1px dashed '+this.TEAL,background:'#fff',color:this.TEAL,borderRadius:8,fontSize:11.5,cursor:'pointer',fontWeight:600}},'\u2b06 \u0e41\u0e19\u0e1a\u0e44\u0e1f\u0e25\u0e4c')),
         h('div',{style:{display:'flex',gap:10,marginTop:16}},
           h('button',{onClick:close,style:{flex:1,padding:'12px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:10,fontSize:13.5,color:this.INK,cursor:'pointer',fontWeight:500}},'\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01'),
