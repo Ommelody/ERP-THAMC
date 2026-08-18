@@ -381,7 +381,8 @@ class Component extends DCLogic {
       this.state.scanModal? this.scanSheet():null,
       this.state.exportModal? this.exportSheet():null,
       this.state.cmtModal? this.cmtSheet():null,
-      this.state.imLookup? this.itemLookupSheet():null); }
+      this.state.imLookup? this.itemLookupSheet():null,
+      this.state.bk06Modal? this.bk06Doc():null); }
 
   brand(dark){ const h=React.createElement;
     return h('div',{style:{display:'flex',alignItems:'center',gap:11}},
@@ -959,7 +960,7 @@ class Component extends DCLogic {
     if(d.editId){ const ex=this.brById(d.editId); if(ex){ this.persistBr(Object.assign({},ex,{bk06:d.bk06||ex.bk06||null,requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',items:d.items.filter(it=>it.d),docs:d.docs||[],status:'รออนุมัติผู้บริหาร',log:(ex.log||[]).concat([{s:'ผู้ขอแก้ไขและยื่นใหม่',by:d.requester,at:this.now(),note:'แก้ไขรายละเอียดและส่งให้ผู้บริหารพิจารณาอีกครั้ง'}])})); }
       this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:d.editId}); this.toastMsg('แก้ไขและยื่นคำขอใหม่แล้ว — '+d.editId); window.scrollTo&&window.scrollTo(0,0); return; }
     const id=await this.genDocId('BR');
-    const nb={kind:'br',id,at:this.now(),fy:this.fyNow(),bk06:d.bk06||null,requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:false,code:'',status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
+    const nb={kind:'br',id,at:this.now(),fy:this.fyNow(),bk06:d.bk06||null,requester:d.requester,dept:d.dept,dn:d.dn,tel:d.tel,pos:d.pos,itemName:(d.items.filter(it=>it.d).length>1? first.d+' และอีก '+(d.items.filter(it=>it.d).length-1)+' รายการ' : first.d),reason:d.reason,qty:first.qty,unit:first.u,value,neededDate:d.neededDate,cat:catName,procType:d.procType,med:false,hasCode:!!(first.c||'').trim(),code:(first.c||'').trim(),status:'รออนุมัติผู้บริหาร',budgetType:d.budgetType,budgetPlan:d.budgetPlan,budgetName:catName,budgetCode:d.budgetCode||'',prId:'',items:d.items.filter(it=>it.d),docs:d.docs||[],log:[{s:'ยื่นขออนุมัติจัดสรรงบ',by:d.requester,at:this.now()}]};
     this.insertBr(nb); this.setState({brDraft:this.newBrDraft(),brCreatedFlash:true,brCreatedId:id,page:'br-create'}); this.toastMsg('ส่งคำขออนุมัติจัดสรรงบแล้ว — '+id); window.scrollTo&&window.scrollTo(0,0); }
   // พัสดุรับเรื่อง (เลือกเงื่อนไข)
   prReceive(id,cond){ const p=(this.state.pr||[]).find(x=>x.id===id); if(!p)return; const note=((this.state.recvNotes||{})[id]||'').trim(); const detail=note?(cond+' — '+note):cond; this.persistPr(Object.assign({},p,{status:'พัสดุรับเรื่อง',condition:cond,log:(p.log||[]).concat([{s:'พัสดุรับเรื่อง',by:this.role().user.name,at:this.now(),note:detail}])})); this.setState(s=>({recvNotes:Object.assign({},s.recvNotes,{[id]:''})})); this.toastMsg('รับเรื่องแล้ว · เงื่อนไข: '+cond); }
@@ -2171,6 +2172,9 @@ class Component extends DCLogic {
         h('div',{style:{display:'flex',flexWrap:'wrap',gap:8}}, docs.map((d,i)=>{ const isLink=this.docIsLink(d); const has=!!this.docUrl(d); return h('span',{key:i,onClick:()=>this.openDoc(d),title:has?'เปิดเอกสาร':'',style:{display:'flex',alignItems:'center',gap:7,padding:'7px 12px',borderRadius:9,background:isLink?this.PURBG:this.BLUEBG,fontSize:12,color:isLink?'#5342a0':'#215c96',cursor:has?'pointer':'default',textDecoration:has?'underline':'none'}},h('span',null,isLink?'\uD83D\uDD17':'\uD83D\uDCCE'),this.docName(d),this.docKind(d)?h('span',{style:{fontSize:10,opacity:.7}},'· '+this.docKind(d)):null); }))):null);
     const btns=[];
     btns.push(h('button',{key:'doc',onClick:()=>this.setState({docModal:rec.id,docType:rec.kind}),style:{padding:'10px 16px',border:'1px solid '+this.LINE,background:'#fff',borderRadius:9,fontSize:13,cursor:'pointer',color:this.INK}},'\u0e40\u0e1b\u0e34\u0e14\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23 '+(rec.kind==='br'?'BR':'PR')));
+    if(br && rec.bk06){
+      btns.push(h('button',{key:'bk06',onClick:()=>this.setState({bk06Modal:rec.id,sel:null}),style:{padding:'10px 16px',border:'1px solid '+this.AMBER,background:this.AMBERBG,borderRadius:9,fontSize:13,cursor:'pointer',color:this.AMBER,fontWeight:600}},'ดูแบบ บก.06'));
+    }
     if(!br && rec.brId && this.brById(rec.brId)){
       btns.push(h('button',{key:'vbr',onClick:()=>this.setState({docModal:rec.brId,docType:'br'}),style:{padding:'10px 16px',border:'1px solid '+this.BLUE,background:this.BLUEBG,borderRadius:9,fontSize:13,cursor:'pointer',color:this.BLUE,fontWeight:600}},'\u0e14\u0e39\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23 BR \u0e15\u0e49\u0e19\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07 ('+rec.brId+')'));
     }
@@ -2892,6 +2896,7 @@ class Component extends DCLogic {
         h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,gap:10}},
           h('div',{style:{color:'#fff',fontSize:13,fontWeight:600}},br?'เอกสาร: ใบขออนุมัติงบประมาณ':'เอกสาร: ใบเสนอความต้องการซื้อ/จ้าง/เช่า'),
           h('div',{style:{display:'flex',gap:8}},
+            (br&&rec.bk06)? h('button',{onClick:()=>this.setState({docModal:null,bk06Modal:rec.id}),style:{padding:'7px 14px',border:'none',background:this.AMBERBG,color:this.AMBER,borderRadius:8,fontSize:12,cursor:'pointer',fontWeight:600}},'แบบ บก.06'):null,
             h('button',{onClick:()=>this.printDoc(),style:{padding:'7px 14px',border:'none',background:'#fff',color:this.INK,borderRadius:8,fontSize:12,cursor:'pointer',fontWeight:600}},'พิมพ์ / บันทึก PDF'),
             h('button',{onClick:close,style:{padding:'7px 12px',border:'none',background:'rgba(255,255,255,.2)',color:'#fff',borderRadius:8,fontSize:14,cursor:'pointer'}},'✕'))),
         h('div',{id:'printDoc',style:{background:'#fff',borderRadius:6,padding:R.isMobile?'22px 18px':'40px 44px',boxShadow:'0 24px 60px rgba(10,25,22,.4)'}},
@@ -2912,13 +2917,50 @@ class Component extends DCLogic {
             h('span',null,'เอกสารเลขที่ '+rec.id),
             h('span',null,'พิมพ์เมื่อ '+this.printStamp()))))));
   }
+  bk06Doc(){ const h=React.createElement; const R=this.R; const rec=this.recById(this.state.bk06Modal); if(!rec) return null;
+    const bk=rec.bk06||{}; const close=()=>this.setState({bk06Modal:null});
+    const LINEC='#333';
+    const dot=(v,w)=>h('span',{style:{flex:w?'none':1,width:w||'auto',minWidth:0,borderBottom:'1px dotted '+LINEC,fontSize:13.5,padding:'2px 5px',color:'#111',display:'inline-block'}},v||'\u00a0');
+    const lbl=t=>h('span',{style:{fontSize:13.5,whiteSpace:'nowrap'}},t);
+    const row=(children,indent)=>h('div',{style:{display:'flex',alignItems:'baseline',gap:6,marginBottom:11,paddingLeft:indent||0}},children);
+    const thDate=v=>{ if(!v) return ''; const p=String(v).split('-'); if(p.length!==3) return v;
+      const m=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      return (+p[2])+' '+m[(+p[1])-1]+' '+((+p[0])+543); };
+    return h('div',{onClick:close,style:{position:'fixed',inset:0,background:'rgba(15,30,26,.55)',zIndex:89,display:'flex',justifyContent:'center',alignItems:'flex-start',padding:R.isMobile?'calc(12px + env(safe-area-inset-top)) 10px 10px':'26px 20px',overflowY:'auto',animation:'overlayIn .15s'}},
+      h('div',{onClick:e=>e.stopPropagation(),style:{width:'100%',maxWidth:800,animation:'sheetIn .22s'}},
+        h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,gap:10}},
+          h('div',{style:{color:'#fff',fontSize:13,fontWeight:600}},'เอกสาร: แบบ บก.06 · '+rec.id),
+          h('div',{style:{display:'flex',gap:8}},
+            h('button',{onClick:()=>this.printDoc('แบบ บก.06'),style:{padding:'7px 14px',border:'none',background:'#fff',color:this.INK,borderRadius:8,fontSize:12,cursor:'pointer',fontWeight:600}},'พิมพ์ / บันทึก PDF'),
+            h('button',{onClick:close,style:{padding:'7px 12px',border:'none',background:'rgba(255,255,255,.2)',color:'#fff',borderRadius:8,fontSize:14,cursor:'pointer'}},'\u2715'))),
+        h('div',{id:'printDoc',style:{background:'#fff',borderRadius:6,padding:R.isMobile?'26px 20px':'48px 56px',boxShadow:'0 24px 60px rgba(10,25,22,.4)',color:'#111'}},
+          h('div',{style:{textAlign:'right',fontSize:13,fontWeight:700,marginBottom:14}},'แบบ บก.06'),
+          h('div',{style:{textAlign:'center',fontSize:15.5,fontWeight:700,lineHeight:1.6,marginBottom:22}},
+            'ตารางแสดงวงเงินงบประมาณที่ได้รับจัดสรรและรายละเอียดค่าใช้จ่าย',h('br'),
+            'การจัดซื้อจัดจ้างที่มิใช่งานก่อสร้าง'),
+          h('div',{style:{border:'1px solid '+LINEC,padding:R.isMobile?'18px 14px':'26px 26px 22px'}},
+            row([lbl('1. ชื่อโครงการ'),dot(bk.projName||rec.itemName)]),
+            row([lbl('2. หน่วยงานเจ้าของโครงการ'),dot(bk.owner||rec.dn)]),
+            row([lbl('3. วงเงินงบประมาณที่ได้รับจัดสรร'),dot(this.fmtN(bk.value||rec.value||0)),lbl('บาท')]),
+            row([lbl('4. วันที่กำหนดราคากลาง (ราคาอ้างอิง) ณ วันที่'),dot(thDate(bk.refDate))]),
+            row([lbl('เป็นเงิน'),dot(bk.refAmount?this.fmtN(+String(bk.refAmount).replace(/,/g,'')||0):''),lbl('บาท')],R.isMobile?12:34),
+            row([lbl('ราคา/หน่วย (ถ้ามี)'),dot(bk.refUnit?this.fmtN(+String(bk.refUnit).replace(/,/g,'')||0):''),lbl('บาท')],R.isMobile?12:34),
+            h('div',{style:{fontSize:13.5,marginBottom:11,marginTop:16}},'5. แหล่งที่มาของราคากลาง (ราคาอ้างอิง)'),
+            row([lbl('5.1'),dot(bk.src1)],R.isMobile?12:34),
+            row([lbl('5.2'),dot(bk.src2)],R.isMobile?12:34),
+            row([lbl('5.3'),dot(bk.src3)],R.isMobile?12:34),
+            h('div',{style:{fontSize:13.5,marginBottom:11,marginTop:16}},'6. รายชื่อเจ้าหน้าที่ผู้กำหนดราคากลาง (ราคาอ้างอิง) ทุกคน'),
+            row([lbl('6.1'),dot(bk.off1)],R.isMobile?12:34),
+            row([lbl('6.2'),dot(bk.off2)],R.isMobile?12:34),
+            row([lbl('6.3'),dot(bk.off3)],R.isMobile?12:34)),
+          h('div',{style:{marginTop:20,fontSize:11,color:this.MUTE,textAlign:'right'}},'เลขที่คำขอ '+rec.id+' · พิมพ์ '+this.printStamp())))); }
   printStamp(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+(d.getFullYear()+543)+' '+p(d.getHours())+':'+p(d.getMinutes())+' น.'; }
-  printDoc(){
+  printDoc(overrideTitle){
     try{
       const node=document.getElementById('printDoc'); if(!node){ window.print(); return; }
       const w=window.open('','_blank'); if(!w){ window.print(); return; }
       const logo=location.href.replace(/[^/]*$/,'')+'assets/thamc_logo.jpg';
-      const title=this.state.docType==='br'?'ใบขออนุมัติงบประมาณ':'ใบเสนอความต้องการซื้อ';
+      const title=overrideTitle||(this.state.docType==='br'?'ใบขออนุมัติงบประมาณ':'ใบเสนอความต้องการซื้อ');
       const css='*{box-sizing:border-box}body{font-family:"IBM Plex Sans Thai",sans-serif;margin:0;padding:0;color:#182421;font-size:11px;line-height:1.4}img{max-width:100%}table{border-collapse:collapse;width:100%;table-layout:fixed}td,th{word-wrap:break-word}tr,td,th,thead,tbody{page-break-inside:avoid}h1,h2,h3,h4{page-break-after:avoid;margin:.3em 0}@page{size:A4 portrait;margin:10mm}@media print{html,body{width:190mm}#sheet{width:190mm}.noprint{display:none!important}}#sheet{width:190mm;margin:0 auto}';
       w.document.write('<html><head><meta charset="utf-8"><title>'+title+'</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet"><style>'+css+'</style></head><body><div id="sheet">'+node.innerHTML.split('assets/thamc_logo.jpg').join(logo)+'</div></body></html>');
       w.document.close(); setTimeout(function(){ try{w.focus();w.print();}catch(e){} },600);
