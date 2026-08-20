@@ -2870,7 +2870,7 @@ class Component extends DCLogic {
     const box=(pos)=>({left:'flex-start',center:'center',right:'flex-end'}[pos]||'flex-start');
     const prev=h('div',{style:{background:'#fff',border:'1px solid '+this.LINE,borderRadius:10,padding:'18px 20px',minHeight:150}},
       h('div',{style:{position:'relative',minHeight:c.emblemShow||c.qrShow?Math.max(c.emblemShow?c.emblemSize:0,c.qrShow?c.qrSize+9:0)+6:34}},
-        c.emblemShow? h('img',{src:'assets/tu_emblem.png',style:Object.assign({height:c.emblemSize*.62,objectFit:'contain',position:'absolute',top:0},c.emblemPos==='left'?{left:0}:c.emblemPos==='right'?{right:0}:{left:'50%',transform:'translateX(-50%)'})}):null,
+        c.emblemShow? h('img',{src:'assets/tu_emblem2.png',style:Object.assign({height:c.emblemSize*.62,objectFit:'contain',position:'absolute',top:0},c.emblemPos==='left'?{left:0}:c.emblemPos==='right'?{right:0}:{left:'50%',transform:'translateX(-50%)'})}):null,
         c.qrShow? h('div',{style:Object.assign({position:'absolute',top:0,textAlign:'center'},c.qrPos==='right'?{right:0}:c.qrPos==='left'?{left:0}:{left:'50%',transform:'translateX(-50%)'})},
           h('div',{style:{width:c.qrSize*.62,height:c.qrSize*.62,background:'repeating-conic-gradient(#111 0 25%,#fff 0 50%) 0 0/6px 6px'}}),
           h('div',{style:{fontSize:7,color:'#666',marginTop:1,fontFamily:"'IBM Plex Mono',monospace"}},'BR-XXXXXX')):null,
@@ -3099,14 +3099,16 @@ class Component extends DCLogic {
             const at=(pos)=>pos==='left'?{left:0}:pos==='right'?{right:0}:{left:'50%',transform:'translateX(-50%)'};
             const clash=c.emblemShow&&c.qrShow&&c.emblemPos===c.qrPos;
             return h('div',{style:{position:'relative',minHeight:Math.max(c.emblemShow?es:0,c.qrShow?qs+12:0,46)+6,marginBottom:6}},
-              c.emblemShow? h('img',{src:'assets/tu_emblem.png',alt:'\u0e15\u0e23\u0e32\u0e18\u0e23\u0e23\u0e21\u0e28\u0e32\u0e2a\u0e15\u0e23\u0e4c',onError:e=>{e.target.style.display='none';},style:Object.assign({position:'absolute',top:0,height:es,objectFit:'contain'},at(c.emblemPos))}):null,
+              c.emblemShow? h('img',{src:'assets/tu_emblem2.png',alt:'\u0e15\u0e23\u0e32\u0e18\u0e23\u0e23\u0e21\u0e28\u0e32\u0e2a\u0e15\u0e23\u0e4c',onError:e=>{e.target.style.display='none';},style:Object.assign({position:'absolute',top:0,height:es,objectFit:'contain'},at(c.emblemPos))}):null,
               c.qrShow? h('div',{style:Object.assign({position:'absolute',top:clash?es+4:0,textAlign:'center'},at(c.qrPos))},this.qrImg(rec.id,qs),h('div',{style:{fontSize:8.5,color:'#555',marginTop:1,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:.2}},rec.id)):null,
               h('div',{style:{textAlign:'center',paddingTop:(c.emblemShow||c.qrShow)?Math.max(es,qs)*.42:4}},h('div',{style:{fontSize:R.isMobile?c.titleSize*.82:c.titleSize,fontWeight:700,letterSpacing:.5}},'\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21'))); })(),
           this.docCfg().showRule? h('div',{style:{borderTop:'1.5px solid #111',marginBottom:9}}):h('div',{style:{marginBottom:9}}),
-          h('div',null,h('b',null,'ส่วนราชการ'),'  ',dotv(dn,220),'  โทร. ',dotv(m.tel,120)),
-          h('div',{style:{display:'flex',gap:20,flexWrap:'wrap'}},
-            h('div',null,h('b',null,'ที่'),' ',dotv(rec.id,150)),
-            h('div',null,h('b',null,'วันที่'),' ',dotv(this.fullThai?this.fullThai(rec.at):rec.at,150))),
+          h('div',{style:{display:'flex'}},
+            h('div',{style:{width:'48.5%',flexShrink:0}},h('b',null,'ส่วนราชการ'),' ',dotv(dn,150)),
+            h('div',{style:{flex:1}},'โทร. ',dotv(m.tel,150))),
+          h('div',{style:{display:'flex'}},
+            h('div',{style:{width:'48.5%',flexShrink:0}},h('b',null,'ที่'),' ',dotv(rec.id,150)),
+            h('div',{style:{flex:1}},h('b',null,'วันที่'),' ',dotv(this.fullThai?this.fullThai(rec.at):rec.at,150))),
           h('div',null,h('b',null,'เรื่อง'),'  ',subject,dotv(item,240),' จำนวน ',dotv(qty,90),m.method==='bid'?'':' โดย'+mm.label),
           h('div',null,h('b',null,'เรียน'),'  ผู้อำนวยการ ( ผ่านรองผู้อำนวยการ ฝ่ายบริหาร )'),
           h('div',{style:{textIndent:38,marginTop:10}},'ด้วย ',dotv(dn,180),' มีความประสงค์จะจัดซื้อ/จ้าง ',dotv(item,230),' จำนวน ',dotv(qty,80),' เป็นจำนวนเงินทั้งสิ้น ',dotv(this.fmtN(rec.value||0),110),' (',this.bahtText(rec.value),') เพื่อ ',dotv(rec.reason,300)),
@@ -3125,13 +3127,7 @@ class Component extends DCLogic {
             h('div',null,'(ผู้จัดการฝ่าย) ',dotv('',150),h('div',{style:{textAlign:'center'}},'( '+(m.mgr||'…………………')+' )'),h('div',{style:{textAlign:'center'}},'ตำแหน่ง ………………')),
             h('div',null,dotv('',210),h('div',{style:{textAlign:'center'}},'(ผู้ช่วยศาสตราจารย์ นายแพทย์วิชัย ลีละวงศ์เทวัญ)'),h('div',{style:{textAlign:'center'}},'รองผู้อำนวยการศูนย์การแพทย์ ฝ่ายบริหาร')),
             h('div',null,dotv('',210),h('div',{style:{textAlign:'center'}},'(รองศาสตราจารย์ นายแพทย์ จิตตินัดด์ หะวานนท์)'),h('div',{style:{textAlign:'center'}},'ผู้อำนวยการศูนย์การแพทย์ธรรมศาสตร์'))),
-          h('div',{style:{marginTop:22,fontSize:12,lineHeight:1.8,borderTop:'1px dashed #999',paddingTop:10}},
-            h('b',null,'หมายเหตุ : เอกสารแนบ'),
-            h('div',null,'1. ใบเสนอความต้องการซื้อ/จ้าง'),
-            h('div',null,'2. ใบเสนอราคา'),
-            h('div',null,'3. TOR/คุณลักษณะเฉพาะของพัสดุ'),
-            h('div',null,'4. Spec ของผู้ขาย'),
-            (rec.docs||[]).length? h('div',{style:{marginTop:6,color:'#333'}},'ไฟล์ที่แนบในระบบ: '+(rec.docs||[]).map(x=>this.docName(x)).join(', ')):null)))); }
+          null))); }
   memoEditSheet(){ const h=React.createElement; const R=this.R; const rec=this.recById(this.state.memoEdit); if(!rec) return null;
     const m=this.memoOf(rec); const mm=this.METHODS.find(x=>x.k===m.method)||this.METHODS[0];
     const close=()=>this.setState({memoEdit:null});
