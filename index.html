@@ -825,7 +825,7 @@ class Component extends DCLogic {
       if(r && r.data && r.data.ok===false){ this.toastMsg('จัดสรรงบไม่สำเร็จ: '+(r.data.msg||'งบคงเหลือไม่พอ')); return; }
       if(r && !r.error && r.data && r.data.ok){
         this.setState(s=>({br:s.br.map(x=>x.id===id?Object.assign({},x,{status:'จัดสรรงบแล้ว',code:code,hasCode:!!code,log:(x.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this._authName||this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code+' (ตัดงบผ่านฐานข้อมูล)'}])}):x)}));
-        this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg('จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); return; }
+        this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg(((r.data.warn?('⚠ '+r.data.warn+' · '):''))+'จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); return; }
     }catch(e){ console.warn('allocate_budget',e); } }
     // fallback (โหมดสาธิต / RPC ยังไม่ได้ติดตั้ง)
     this.persistBr(Object.assign({},b,{status:'จัดสรรงบแล้ว',code:code,hasCode:true,log:(b.log||[]).concat([{s:'จัดสรรงบ + รหัสพัสดุ',by:this.role().user.name,at:this.now(),note:'จัดสรรงบ '+code}])})); this.setState({allocModal:null,allocCode:'',itemProModal:null,sel:null}); this.toastMsg('จัดสรรงบแล้ว · ผู้ขอสามารถ Copy to PR ได้'); }
@@ -1746,7 +1746,12 @@ class Component extends DCLogic {
       ],4),
       list.length? h('div',{style:{display:'flex',flexDirection:'column',gap:14}}, list.map(b=>this.brApproveCard(b))) : this.card(this.emptyBox('\u0e44\u0e21\u0e48\u0e21\u0e35\u0e04\u0e33\u0e02\u0e2d\u0e23\u0e2d\u0e1e\u0e34\u0e08\u0e32\u0e23\u0e13\u0e32 \u2713')));
   }
-  brApproveCard(b){ const h=React.createElement; const R=this.R; const pool=this.poolFor(b.dept,b.cat); const alloc=pool?pool.alloc:0,used=pool?pool.committed:0,remain=alloc-used; const ok=remain>=b.value;
+  brApproveCard(b){ const h=React.createElement; const R=this.R;
+    const bl=b.budgetCode? this.budgetRemain(b.budgetCode):null;
+    let alloc,used,remain,srcLabel;
+    if(bl){ alloc=bl.current||bl.avail; used=Math.max(0,(bl.current||bl.avail)-bl.net); remain=bl.net; srcLabel=b.budgetCode+' \u00b7 '+b.cat; }
+    else { const pool=this.poolFor(b.dept,b.cat); alloc=pool?pool.alloc:0; used=pool?pool.committed:0; remain=alloc-used; srcLabel=(this.D.deptNames[b.dept]||b.dept)+' / '+b.cat; }
+    const ok=remain>=b.value;
     return this.card(h('div',{style:{padding:R.isMobile?'16px':'18px 20px'}},
       h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:14,flexWrap:'wrap',marginBottom:14}},
         h('div',{style:{minWidth:0}},
@@ -1756,7 +1761,7 @@ class Component extends DCLogic {
           h('div',{style:{fontSize:12,color:this.MUTE,marginTop:2}},'\u0e40\u0e2b\u0e15\u0e38\u0e1c\u0e25: '+b.reason)),
         h('div',{style:{textAlign:'right'}},h('div',{style:{fontSize:11,color:this.MUTE}},'\u0e21\u0e39\u0e25\u0e04\u0e48\u0e32\u0e07\u0e32\u0e19'),h('div',{style:{fontSize:21,fontWeight:700,fontFamily:"'IBM Plex Mono',monospace"}},this.baht(b.value)))),
       h('div',{style:{background:this.PANEL,border:'1px solid '+this.LINE,borderRadius:12,padding:'13px 15px',marginBottom:14}},
-        h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,marginBottom:8}},'\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d \u00b7 '+(this.D.deptNames[b.dept]||b.dept)+' / '+b.cat),
+        h('div',{style:{fontSize:11.5,fontWeight:600,color:this.MUTE,marginBottom:8,fontFamily:bl?"'IBM Plex Mono',monospace":'inherit'}},'\u0e07\u0e1a\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d \u00b7 '+srcLabel),
         this.track2(used+b.value,alloc,used+b.value>alloc),
         h('div',{style:{display:'grid',gridTemplateColumns:R.isMobile?'1fr 1fr':'repeat(3,1fr)',gap:12,marginTop:12}},
           this.miniStat('\u0e07\u0e1a\u0e08\u0e31\u0e14\u0e2a\u0e23\u0e23',this.baht(alloc),this.INK),this.miniStat('\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d',this.baht(remain),ok?this.GREEN:this.RED),this.miniStat('\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e2b\u0e25\u0e31\u0e07\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34',this.baht(remain-b.value),ok?this.GREEN:this.RED))),
@@ -3207,7 +3212,7 @@ class Component extends DCLogic {
       const w=window.open('','_blank'); if(!w){ window.print(); return; }
       const base=location.href.replace(/[^/]*$/,'');
       const title=overrideTitle||(this.state.docType==='br'?'ใบขออนุมัติงบประมาณ':'ใบเสนอความต้องการซื้อ');
-      const css='*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;width:auto}body{font-family:"IBM Plex Sans Thai",sans-serif;color:#111;font-size:13px;line-height:1.65;-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:A4 portrait;margin:0}#sheet{width:100%;max-width:100%;margin:0;padding:14mm 13mm}#sheet div{max-width:100%!important}#sheet [data-print-frame]{padding:4mm 5mm!important}#sheet>div{width:100%!important;margin:0!important;padding:0!important;border-radius:0!important;box-shadow:none!important;background:#fff!important}img{max-width:100%;height:auto}input,select,textarea{border:none!important;border-bottom:1px dotted #333!important;background:transparent!important;font:inherit!important;color:#111!important;padding:1px 4px!important;max-width:100%}input[type=date]{width:auto}table{border-collapse:collapse;width:100%!important;table-layout:auto}td,th{word-wrap:break-word;overflow-wrap:break-word;padding:5px 7px!important;line-height:1.5!important;vertical-align:top}tr,td,th,thead,tbody{page-break-inside:avoid}h1,h2,h3,h4{page-break-after:avoid;margin:.3em 0}@media print{.noprint{display:none!important}}';
+      const css='*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff;width:auto}body{font-family:"IBM Plex Sans Thai",sans-serif;color:#111;font-size:13px;line-height:1.65;-webkit-print-color-adjust:exact;print-color-adjust:exact}@page{size:A4 portrait;margin:14mm 13mm}#sheet{width:100%;max-width:100%;margin:0;padding:0}#sheet div{max-width:100%!important}#sheet [data-print-frame]{padding:4mm 5mm!important}#sheet>div{width:100%!important;margin:0!important;padding:0!important;border-radius:0!important;box-shadow:none!important;background:#fff!important}img{max-width:100%;height:auto}input,select,textarea{border:none!important;border-bottom:1px dotted #333!important;background:transparent!important;font:inherit!important;color:#111!important;padding:1px 4px!important;max-width:100%}input[type=date]{width:auto}table{border-collapse:collapse;width:100%!important;table-layout:auto}td,th{word-wrap:break-word;overflow-wrap:break-word;padding:5px 7px!important;line-height:1.5!important;vertical-align:top}tr,td,th,thead,tbody{page-break-inside:avoid}h1,h2,h3,h4{page-break-after:avoid;margin:.3em 0}@media print{.noprint{display:none!important}}';
       w.document.write('<html><head><meta charset="utf-8"><title>'+title+'</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&family=IBM+Plex+Mono&display=swap" rel="stylesheet"><style>'+css+'</style></head><body><div id="sheet">'+node.innerHTML.replace(/((?:src|href)=")assets\//g,'$1'+base+'assets/')+'</div></body></html>');
       w.document.close(); setTimeout(function(){ try{w.focus();w.print();}catch(e){} },600);
     }catch(e){ try{window.print();}catch(_){} }
